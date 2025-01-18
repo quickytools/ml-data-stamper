@@ -4,17 +4,20 @@ import getVideoFrames from 'https://deno.land/x/get_video_frames@v0.0.10/mod.js'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
+import { getFileSignature } from '@/util/fileUtil'
 
 const fileInput = useTemplateRef('file')
 const videoCanvas = ref()
 const videoCanvasWidth = ref(0)
 const videoCanvasHeight = ref(0)
-const sliderFrameCount = ref(0)
 const sliderFrameIndex = ref(0)
+
+const videoSrc = ref('')
 
 const videoDataSubject = new Subject()
 
 const videoFrames = ref([])
+let canvasRotation = 0
 
 // TODO Enable/disable UI accordingly (while loading)
 
@@ -23,18 +26,14 @@ const seekVideoData = useObservable(
     map((data) => {
       const videoFrameCount = data.frames.length
       if (videoFrameCount) {
-        const { config } = data
-        const width = config.codedWidth
-        const height = config.codedHeight
-        const endTime = data.frames[data.frames.length - 1].timestamp / 1e6
-        // TODO Research if this is accurate
-        const fps = videoFrameCount / endTime
+        const { config, orientation } = data
+        const isRotated = (orientation / 90) % 2 == 1
+        const width = isRotated ? config.codedHeight : config.codedWidth
+        const height = isRotated ? config.codedWidth : config.codedHeight
         return {
           ...data,
           width,
           height,
-          endTime,
-          fps,
         }
       }
 
@@ -43,9 +42,8 @@ const seekVideoData = useObservable(
   ),
 )
 
-const loadFrame = (index) => {
-  const frames = videoFrames.value
-  if (frames && index < frames.length) {
+const loadFrame = (index, frames) => {
+  if (frames && index >= 0 && index < frames.length) {
     const ctx = videoCanvas.value.getContext('2d')
     const frame = frames[index]
     ctx.putImageData(frame.content, 0, 0)
@@ -53,36 +51,126 @@ const loadFrame = (index) => {
 }
 
 watch(seekVideoData, (value, prev) => {
-  const { width, height, frames } = value
+  const { width, height, frames, orientation } = value
+
+  const canvas = videoCanvas.value
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
   if (frames?.length > 0) {
     videoCanvasWidth.value = width
     videoCanvasHeight.value = height
-    sliderFrameCount.value = frames.length
     videoFrames.value = frames
-    loadFrame(0)
+    canvasRotation = (orientation * Math.PI) / 180
+    // TODO Find canvas resize or similar event
+    setTimeout(() => {
+      loadFrame(0, frames)
+    }, 100)
   }
 })
 
 watch(sliderFrameIndex, (index) => {
-  loadFrame(index)
+  loadFrame(index, videoFrames.value)
 })
 
-const getFileSignature = async (videoFile) => {
-  const blob = new Blob([videoFile])
-  const buffer = await blob.arrayBuffer()
-  const messsage = new Uint8Array(buffer)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', messsage)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+async function getMediaProperties(file) {
+  const readChunk = async (chunkSize, offset) =>
+    new Uint8Array(await file.slice(offset, offset + chunkSize).arrayBuffer())
+
+  return new Promise((resolve) => {
+    // TODO Package library rather than loading from CDN
+    MediaInfo.mediaInfoFactory({}, (mediainfo) => {
+      mediainfo
+        .analyzeData(file.size, readChunk)
+        .then((info) => {
+          const tracks = info.media.track
+          const filterTrackType = (typeValue) => {
+            const filtered = tracks.filter((trackInfo) => {
+              const trackType = trackInfo['@type']
+              return (
+                trackType &&
+                typeof trackType == 'string' &&
+                trackType.toLowerCase() == typeValue.toLowerCase()
+              )
+            })
+            return filtered.length ? filtered[0] : {}
+          }
+          const video = filterTrackType('video')
+          const {
+            Duration: duration,
+            FrameRate: frameRate,
+            FrameCount: frameCount,
+            Rotation: rotationText,
+          } = video
+          mediainfo.close()
+
+          let orientation = 0
+          try {
+            orientation = parseInt(rotationText ?? '0')
+          } catch {}
+
+          resolve({
+            duration: duration,
+            frameRate: frameRate,
+            frameCount: frameCount,
+            orientation,
+          })
+        })
+        .catch((error) => {
+          mediainfo.close()
+          console.error(error)
+        })
+    })
+  })
 }
 
-const loadVideo = async (fileSignature, videoFile) => {
+const getRotationMatrix = (rotationDegrees, w, h) => {
+  if (rotationDegrees != 0) {
+    const rotateRadians = (rotationDegrees * Math.PI) / 180
+    let a = 1
+    let b = 0
+    let c = 0
+    let d = 1
+    let dx = 0
+    let dy = 0
+    switch ((rotationDegrees + 360) % 360) {
+      case 90:
+        a = 0
+        b = 1
+        c = -1
+        d = 0
+        dx = h
+        break
+      case 180:
+        a = -1
+        d = -1
+        dx = w
+        dy = h
+        break
+      case 270:
+        a = 0
+        b = -1
+        c = 1
+        d = 0
+        dy = w
+        break
+      default:
+        break
+    }
+    return new DOMMatrix([a, b, c, d, dx, dy])
+  }
+  return null
+}
+
+const loadVideo = async (videoFile, orientation) => {
   const videoUrl = URL.createObjectURL(videoFile)
   const videoData = {
     file: videoFile,
     frames: [],
     config: null,
   }
+  let xform = null
+  const isRotated = (orientation / 90) % 2 == 1
   return getVideoFrames({
     videoUrl,
     async onFrame(frame) {
@@ -90,11 +178,24 @@ const loadVideo = async (fileSignature, videoFile) => {
       const canvas = document.createElement('canvas')
       const width = videoData.config.codedWidth
       const height = videoData.config.codedHeight
-      canvas.width = width
-      canvas.height = height
+
       const ctx = canvas.getContext('2d')
-      ctx.drawImage(frame, 0, 0, width, height)
-      const imageData = ctx.getImageData(0, 0, width, height)
+      if (xform) {
+        const maxSize = Math.max(width, height)
+        canvas.width = maxSize
+        canvas.height = maxSize
+        ctx.save()
+        ctx.setTransform(xform)
+        ctx.drawImage(frame, 0, 0, width, height)
+        ctx.restore()
+      } else {
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(frame, 0, 0, width, height)
+      }
+      const imageData = isRotated
+        ? ctx.getImageData(0, 0, height, width)
+        : ctx.getImageData(0, 0, width, height)
 
       const buffer = new Uint8Array(frame.allocationSize())
       const layout = await frame.copyTo(buffer)
@@ -108,13 +209,14 @@ const loadVideo = async (fileSignature, videoFile) => {
     },
     onConfig(config) {
       videoData.config = config
+      const { codedWidth: w, codedHeight: h } = config
+      if (orientation != 0) {
+        xform = getRotationMatrix(orientation, w, h)
+      }
     },
   }).then(() => {
     URL.revokeObjectURL(videoFile)
-    return {
-      signature: fileSignature,
-      ...videoData,
-    }
+    return videoData
   })
 }
 
@@ -122,10 +224,22 @@ const onFileChange = (e) => {
   const files = e.target.files
   if (files.length) {
     const videoFile = files[0]
+
     getFileSignature(videoFile)
-      .then((signature) => loadVideo(signature, videoFile))
+      .then((signature) =>
+        getMediaProperties(videoFile).then((mediaProperties) => ({
+          fileSignature: signature,
+          ...mediaProperties,
+        })),
+      )
+      .then(async (fileData) => {
+        const videoData = await loadVideo(videoFile, fileData.orientation)
+        return {
+          ...fileData,
+          ...videoData,
+        }
+      })
       .then((videoData) => {
-        const { config } = videoData
         videoDataSubject.next(videoData)
       })
   }
@@ -138,9 +252,9 @@ form
   input#file(type="file" multiple @change='onFileChange')
 q-slider.frame-seeker(v-model="sliderFrameIndex"
                       :min="0"
-                      :max="sliderFrameCount"
+                      :max="videoFrames.length"
                       label-always
-                      v-if="sliderFrameCount>0"
+                      v-if="videoFrames.length>0"
                       )
 canvas(ref="videoCanvas" :width='videoCanvasWidth' :height='videoCanvasHeight')
 </template>
@@ -151,3 +265,4 @@ canvas(ref="videoCanvas" :width='videoCanvasWidth' :height='videoCanvasHeight')
   max-width: 600px;
 }
 </style>
+@/util/fileUtil
