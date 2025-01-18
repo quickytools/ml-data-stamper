@@ -79,6 +79,7 @@ async function getMediaProperties(file) {
 
   return new Promise((resolve) => {
     // TODO Package library rather than loading from CDN
+    //      Can also defer loading until necessary
     MediaInfo.mediaInfoFactory({}, (mediainfo) => {
       mediainfo
         .analyzeData(file.size, readChunk)

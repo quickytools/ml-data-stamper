@@ -10,9 +10,9 @@ import 'quasar/src/css/index.sass'
 
 const app = createApp(App)
 
-app.use(router)
-app.use(Quasar, {
-  plugins: {},
-})
-
-app.mount('#app')
+app
+  .use(router)
+  .use(Quasar, {
+    plugins: {},
+  })
+  .mount('#app')
