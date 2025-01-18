@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { pgTable, text, integer, real, check } from 'drizzle-orm/pg-core'
+
 export const sourceVideos = pgTable(
   'source_videos',
   {
@@ -8,6 +9,8 @@ export const sourceVideos = pgTable(
     frameCount: integer('frame_count').notNull(),
     frameRate: real('frame_rate').notNull(),
     orientationDegrees: integer('orientation_degrees').notNull().default(0),
+    fileName: text('file_name').notNull(),
+    sizeBytes: real('size_bytes').notNull(),
   },
   (table) => [
     {

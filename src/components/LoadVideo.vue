@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { useTemplateRef, ref, watch } from 'vue'
+import { useTemplateRef, ref, watch, inject } from 'vue'
 import getVideoFrames from 'https://deno.land/x/get_video_frames@v0.0.10/mod.js'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
 import { getFileSignature } from '@/util/fileUtil'
+
+const sourceVideoRepository = inject('source-video-repository')
 
 const fileInput = useTemplateRef('file')
 const videoCanvas = ref()
@@ -107,7 +109,7 @@ async function getMediaProperties(file) {
 
           let orientation = 0
           try {
-            orientation = parseInt(rotationText ?? '0')
+            orientation = (parseInt(rotationText ?? '0') + 360) % 360
           } catch {}
 
           resolve({
@@ -240,7 +242,21 @@ const onFileChange = (e) => {
           ...videoData,
         }
       })
-      .then((videoData) => {
+      .then(async (videoData) => {
+        try {
+          const videoDescription = {
+            fileName: videoData.file.name,
+            sizeBytes: videoData.file.size,
+            signature: videoData.fileSignature,
+            frameCount: videoData.frameCount,
+            frameRate: videoData.frameRate,
+            orientationDegrees: videoData.orientation,
+          }
+          const saved = await sourceVideoRepository.saveVideo(videoDescription)
+          console.log('save video data', videoData, saved)
+        } catch (e) {
+          console.error(e)
+        }
         videoDataSubject.next(videoData)
       })
   }
