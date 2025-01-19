@@ -1,4 +1,5 @@
-import db from '../drizzle-db'
+import { eq } from 'drizzle-orm'
+import db from '../drizzleDb'
 import type { VideoDescription } from '.'
 import { sourceVideos } from '../schema/sourceVideos'
 import Joi from 'joi'
@@ -16,5 +17,16 @@ const videoDescriptionSchema = Joi.object({
 
 export const insertVideo = async (description: VideoDescription) => {
   const validated = Joi.attempt(description, videoDescriptionSchema)
-  return db.insert(sourceVideos).values(validated)
+  const inserted = await db
+    .insert(sourceVideos)
+    .values(validated)
+    .returning({ insertedId: sourceVideos.id })
+  return inserted.length ? inserted[0].insertedId : -1
+}
+
+export const queryVideo = async (signature: string) => {
+  const videos = await db.query.sourceVideos.findMany({
+    where: eq(sourceVideos.signature, signature),
+  })
+  return videos.length ? videos[0] : null
 }

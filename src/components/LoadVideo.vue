@@ -252,6 +252,7 @@ const onFileChange = (e) => {
             frameRate: videoData.frameRate,
             orientationDegrees: videoData.orientation,
           }
+          // TODO This is failing
           const saved = await sourceVideoRepository.saveVideo(videoDescription)
           console.log('save video data', videoData, saved)
         } catch (e) {

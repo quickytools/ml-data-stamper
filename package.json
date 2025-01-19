@@ -12,8 +12,7 @@
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
-    "generate-schema-dev": "drizzle-kit generate --config=drizzle-dev.config.ts",
-    "generate-schema-prod": "drizzle-kit generate --config=drizzle-prod.config.ts"
+    "generate-schema": "drizzle-kit generate --config=drizzle.config.ts && node ./compile-migrations.cjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.15",
@@ -25,7 +24,6 @@
     "quasar": "^2.17.6",
     "rxjs": "^7.8.1",
     "vue": "^3.5.13",
-    "vue-pug-plugin": "^2.0.3",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
@@ -51,6 +49,7 @@
     "vite-plugin-vue-devtools": "^7.6.8",
     "vite-plugin-wasm": "^3.4.1",
     "vitest": "^2.1.8",
+    "vue-pug-plugin": "^2.0.3",
     "vue-tsc": "^2.1.10"
   }
 }

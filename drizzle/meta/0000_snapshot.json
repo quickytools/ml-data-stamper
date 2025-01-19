@@ -1,5 +1,5 @@
 {
-  "id": "5f4fcdbb-a0b9-43a8-b24c-fed54244e89d",
+  "id": "149222f7-59a1-489d-9ca8-2dab749f96f0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -49,6 +49,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {},
