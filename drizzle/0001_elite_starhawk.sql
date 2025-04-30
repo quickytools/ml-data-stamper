@@ -1,0 +1,1 @@
+CREATE INDEX "video_frame_idx" ON "video_frames" USING btree ("video_id","frame_index");

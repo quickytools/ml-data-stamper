@@ -8,6 +8,13 @@
       "when": 1737254363988,
       "tag": "0000_easy_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1746033971321,
+      "tag": "0001_elite_starhawk",
+      "breakpoints": true
     }
   ]
 }

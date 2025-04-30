@@ -31,8 +31,13 @@ async function recordMigration(hash: string) {
 export async function migratePglite() {
   console.log('🚀 Starting pglite migration...')
 
-  // Ensure migrations table exists
-  await ensureMigrationsTable()
+  try {
+    // Ensure migrations table exists
+    await ensureMigrationsTable()
+  } catch (e) {
+    console.error('e', e)
+    throw e
+  }
 
   // Get already executed migrations
   const executedHashes = await getMigratedHashes()
