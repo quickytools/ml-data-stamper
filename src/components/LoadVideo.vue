@@ -32,11 +32,7 @@ const seekVideoData = useObservable(
         const isRotated = (orientation / 90) % 2 == 1
         const width = isRotated ? config.codedHeight : config.codedWidth
         const height = isRotated ? config.codedWidth : config.codedHeight
-        return {
-          ...data,
-          width,
-          height,
-        }
+        return { ...data, width, height }
       }
 
       return {}
@@ -112,12 +108,7 @@ async function getMediaProperties(file) {
             orientation = (parseInt(rotationText ?? '0') + 360) % 360
           } catch {}
 
-          resolve({
-            duration: duration,
-            frameRate: frameRate,
-            frameCount: frameCount,
-            orientation,
-          })
+          resolve({ duration: duration, frameRate: frameRate, frameCount: frameCount, orientation })
         })
         .catch((error) => {
           mediainfo.close()
@@ -167,11 +158,7 @@ const getRotationMatrix = (rotationDegrees, w, h) => {
 
 const loadVideo = async (videoFile, orientation) => {
   const videoUrl = URL.createObjectURL(videoFile)
-  const videoData = {
-    file: videoFile,
-    frames: [],
-    config: null,
-  }
+  const videoData = { file: videoFile, frames: [], config: null }
   let xform = null
   const isRotated = (orientation / 90) % 2 == 1
   return getVideoFrames({
@@ -203,11 +190,7 @@ const loadVideo = async (videoFile, orientation) => {
       const buffer = new Uint8Array(frame.allocationSize())
       const layout = await frame.copyTo(buffer)
       const { duration, timestamp } = frame
-      videoData.frames.push({
-        content: imageData,
-        timestamp,
-        duration,
-      })
+      videoData.frames.push({ content: imageData, timestamp, duration })
       frame.close()
     },
     onConfig(config) {
@@ -237,10 +220,7 @@ const onFileChange = (e) => {
       )
       .then(async (fileData) => {
         const videoData = await loadVideo(videoFile, fileData.orientation)
-        return {
-          ...fileData,
-          ...videoData,
-        }
+        return { ...fileData, ...videoData }
       })
       .then(async (videoData) => {
         try {
@@ -265,16 +245,20 @@ const onFileChange = (e) => {
 </script>
 
 <template lang="pug">
-form
-  label(for="file") File
-  input#file(type="file" multiple @change='onFileChange')
-q-slider.frame-seeker(v-model="sliderFrameIndex"
-                      :min="0"
-                      :max="videoFrames.length"
-                      label-always
-                      v-if="videoFrames.length>0"
-                      )
-canvas(ref="videoCanvas" :width='videoCanvasWidth' :height='videoCanvasHeight')
+div.column
+  form
+    div.q-py-sm.row.q-gutter-md
+      label(for="file") File
+      input#file(type="file" multiple @change='onFileChange')
+      q-slider.frame-seeker.col(
+        v-model="sliderFrameIndex"
+        :min="0"
+        :max="videoFrames.length"
+        label-always
+        switch-label-side
+        v-if="videoFrames.length>0"
+      )
+  canvas(ref="videoCanvas" :width='videoCanvasWidth' :height='videoCanvasHeight')
 </template>
 
 <style scoped>
@@ -283,4 +267,3 @@ canvas(ref="videoCanvas" :width='videoCanvasWidth' :height='videoCanvasHeight')
   max-width: 600px;
 }
 </style>
-@/util/fileUtil
