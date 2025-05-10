@@ -11,7 +11,22 @@ const drawOnCanvas = () => {
   const canvasWidth = canvas.width
   const canvasHeight = canvas.height
 
-  ctx.strokeStyle = 'red'
+  // checkerboard pattern utilizes Odd and Even rows and columns to create a pattern
+  // for each row, if the sum of the row and column index is even, draw a stroke
+  // otherwise, fill the rectangle with a different color
+  for(let i = 0; i <= canvasHeight; i++){
+    for(let j = 0; j <= canvasWidth; j++){
+      if((j + i) % 2 === 0){
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.20)';
+        ctx.strokeRect(j * 10, i * 10, 10, 10);
+      }
+      else{
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.10)';
+        ctx.fillRect(j * 10, i * 10, 10, 10);
+      }
+    }
+  }
+  /* ctx.strokeStyle = 'red'
   ctx.lineWidth = 64
   ctx.beginPath()
   ctx.moveTo(0, 0)
@@ -29,12 +44,12 @@ const drawOnCanvas = () => {
   ctx.fill()
 
   ctx.fillStyle = 'green'
-  ctx.fillRect(50, 150, 60, 20)
+  ctx.fillRect(50, 150, 60, 20) */
 }
 
 onMounted(() => {
-  const canvasWidth = 600
-  const canvasHeight = 400
+  const canvasWidth = 600;
+  const canvasHeight = 400;
   editorCanvasWidth.value = canvasWidth
   editorCanvasHeight.value = canvasHeight
 
