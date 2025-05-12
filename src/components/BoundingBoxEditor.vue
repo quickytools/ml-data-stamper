@@ -17,11 +17,11 @@ const drawOnCanvas = () => {
   for(let i = 0; i <= canvasHeight; i++){
     for(let j = 0; j <= canvasWidth; j++){
       if((j + i) % 2 === 0){
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.20)';
-        ctx.strokeRect(j * 10, i * 10, 10, 10);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.80)';
+        ctx.fillRect(j * 10, i * 10, 10, 10);
       }
       else{
-        ctx.fillStyle = 'rgba(5, 5, 5, 0.10)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'; // the very last value changes the transparency of the darker boxes.
         ctx.fillRect(j * 10, i * 10, 10, 10);
       }
     }
