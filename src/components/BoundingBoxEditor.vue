@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { x } from 'joi'
 import { ref, onMounted, nextTick } from 'vue'
 
 const editorCanvas = ref()
@@ -7,6 +8,10 @@ const editorCanvasHeight = ref(0)
 const x1Coordinate = ref(0)
 const y1Coordinate = ref(0)
 const userDrawing = ref(false)
+const isItDraggable = ref(false) // this is a flag to check if the user is dragging the rectangle
+const rectangle = ref({x: 0, y: 0, width: 0, height: 0})// this is the rectangle object that will be to store the coordinates of the rectangle
+const whereUserClicked = ref({x: 0, y:0})// this is the object that will store the coordinates of the mouse click
+const whereUserReleased = ref({x: 0, y:0})// this is the object that will store the coordinates of the mouse release
 
 const canvasBackground = () => {
   const canvas = editorCanvas.value
@@ -35,7 +40,7 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
   const ctx = canvas.getContext('2d');
 
   ctx.clearRect(0, 0, canvas.width, canvas.height); // these two lines of code help to clear the blurred lines, or having a trail effect
- canvasBackground();// this redraws the background
+  canvasBackground();// this redraws the background
 
   const startX = Math.min(x1, x2);
   const startY = Math.min(y1, y2);
@@ -43,33 +48,68 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
   const height = Math.abs(y2 - y1);
 
   ctx. beginPath();
-  ctx.fillStyle = 'rgba(255, 0, 0, 0.03)';
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.05)';
+  rectangle.value = {x: startX, y: startY, width: width, height: height} // this is the rectangle object that will be to store the coordinates of the rectangle
   ctx.fillRect(startX, startY, width, height); // draw the rectangle
+}
 
-  /* ctx.fillStyle = 'orange'
-  ctx.beginPath()
-  const radius = (canvasWidth + canvasHeight) * 0.1
-  ctx.ellipse(canvasWidth * 0.5, canvasHeight * 0.5, radius, radius, 50, 0, Math.PI * 2)
-  ctx.fill()
+const movingRectangle = (action: MouseEvent) => {// this function is called when the user drags the rectangle
+  const Canvas = editorCanvas.value
+  const ctx = Canvas.getContext('2d')
 
-  ctx.fillStyle = 'green'
-  ctx.fillRect(50, 150, 60, 20) */
+  ctx.clearRect(0, 0, Canvas.width, Canvas.height);
+  canvasBackground();//redraws the background
+
+  rectangle.value = {// updating the rectangle object with the new coordinates with the mouse click
+    x: action.offsetX - whereUserClicked.value.x, // sets the new value of the rectangle object minus the x coordinate of the mouse click
+    y: action.offsetY - whereUserClicked.value.y, // sets the new value of the rectangle object minus the y coordinate of the mouse click
+    width: rectangle.value.width,
+    height: rectangle.value.height
+  };
+
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.05)';
+  ctx.fillRect(rectangle.value.x, rectangle.value.y, rectangle.value.width, rectangle.value.height); // draw the rectangle
 }
 
 const mouseDownOnCanvas = (action: MouseEvent) =>{
-  userDrawing.value = true; // set the flag to true once the user clicks on the canvas
   x1Coordinate.value = action.offsetX; // get the x coordinate of the mouse click
   y1Coordinate.value = action.offsetY;
+  if(x1Coordinate.value >= rectangle.value.x && x1Coordinate.value <= rectangle.value.x + rectangle.value.width
+      && y1Coordinate.value >= rectangle.value.y && y1Coordinate.value <= rectangle.value.y + rectangle.value.height){
+
+    whereUserClicked.value.x = x1Coordinate.value - rectangle.value.x; // get the x & y coordinate of the mouse click
+    whereUserClicked.value.y = y1Coordinate.value - rectangle.value.y;
+
+    userDrawing.value = false; // set the flag to false once mouse is on the rectangle
+    isItDraggable.value = true; // set the flag to true once the user on the rectangle
+  }
+  else{
+    userDrawing.value = true; // set the flag to true when the user clicks on the canvas
+    isItDraggable.value = false; // set the flag to false when user clicks on the canvas
+  }
 }
 
 const mouseUpOnCanvas = () => {
   userDrawing.value = false;
+  isItDraggable.value = false; // set the flag to false once the user releases the mouse button
+  whereUserReleased.value = {
+    x: x1Coordinate.value,
+    y: y1Coordinate.value
+  }
+
+
 }
 
 const mouseMoveOnCanvas = (action: MouseEvent) => {
-  if(!userDrawing.value) return; // if the user is not drawing, do nothing
+  if(isItDraggable.value){
+    movingRectangle(action);
+  }
+  else if(userDrawing.value){ // if the user is not drawing, do nothing
   drawOnCanvas(x1Coordinate.value, y1Coordinate.value, action.offsetX, action.offsetY)
+  }
 }
+
 
 onMounted(() => {
   const canvasWidth = 600;
@@ -93,7 +133,7 @@ div.column
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
     )
-
+    p Click and drag to draw a bounding box. user clicked on x: {{whereUserReleased.x}}, y: {{whereUserReleased.y}}. Click and drag to move the rectangle.
 </template>
 
 <style scoped>
