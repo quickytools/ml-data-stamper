@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.0",
+    "@huggingface/transformers": "^3.5.1",
     "@quasar/extras": "^1.16.17",
     "@vueuse/rxjs": "^13.1.0",
     "drizzle-orm": "^0.43.1",
