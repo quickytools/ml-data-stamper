@@ -172,8 +172,9 @@ const mouseDownOnCanvas = (action: MouseEvent) =>{// controller function to chec
 }
 
 const mouseUpOnCanvas = () => {// controller function to check if the user releases the mouse button on the canvas
+  // changes the flags to false
   userDrawing.value = false;
-  isItDraggable.value = false; // set the flag to false once the user releases the mouse button
+  isItDraggable.value = false;
   isResizing.value = false;
   whereUserReleased.value = {
     x: x1Coordinate.value,
@@ -183,13 +184,13 @@ const mouseUpOnCanvas = () => {// controller function to check if the user relea
 
 const mouseMoveOnCanvas = (action: MouseEvent) => {// controller function to check if the user is moving the mouse on the canvas
   const {x , y} = getMousePositionOnCanvas(action); // get the mouse position on the canvas
-  if(isItDraggable.value){
+  if(isItDraggable.value){// check if the user is dragging the rectangle
     movingRectangle(x, y);
   }
-  else if(isResizing.value){
+  else if(isResizing.value){// check if the user is resizing the rectangle
     resizingRectangle(x, y);
   }
-  else if(userDrawing.value){ // if the user is not drawing, do nothing
+  else if(userDrawing.value){ // check if the user is drawing
     drawOnCanvas(x1Coordinate.value, y1Coordinate.value, action.offsetX, action.offsetY)
   }
 }
