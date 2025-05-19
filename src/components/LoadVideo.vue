@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { useTemplateRef, ref, watch, inject } from 'vue'
+import { useTemplateRef, ref, watch, inject, onMounted } from 'vue'
 import getVideoFrames from 'https://deno.land/x/get_video_frames@v0.0.10/mod.js'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
 import { getFileSignature } from '@/util/fileUtil'
+
+// TODO Refactor loading video data, rendering frame data
+import { pipeline, RawImage } from '@huggingface/transformers'
+import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const sourceVideoRepository = inject('source-video-repository')
 
@@ -21,7 +25,26 @@ const videoDataSubject = new Subject()
 const videoFrames = ref([])
 let canvasRotation = 0
 
+const isLoadingDetector = ref(false)
+const isDetectingObjects = ref(false)
+
 // TODO Enable/disable UI accordingly (while loading)
+
+const objectDetector = new YoloObjectDetector()
+objectDetector.addEventListener('loading', ({ detail }) => {
+  isLoadingDetector.value = detail
+})
+objectDetector.addEventListener('detecting', ({ detail }) => {
+  isDetectingObjects.value = detail
+})
+
+const loadDetector = async () => {
+  await objectDetector.load()
+}
+
+const detectObjects = async (imageData) => {
+  return objectDetector.detect(imageData)
+}
 
 const seekVideoData = useObservable(
   videoDataSubject.pipe(
@@ -242,6 +265,16 @@ const onFileChange = (e) => {
       })
   }
 }
+
+onMounted(() => {
+  // TODO Demonstrates object detection on URL image. Delete once detection on video frames is complete.
+  loadDetector().then(async () => {
+    const tennisImage =
+      'https://static.nike.com/a/images/f_auto/dpr_3.0,cs_srgb/h_484,c_limit/193ecef7-04df-45a4-a9aa-0643cf7ba4be/how-to-teach-the-tennis-serve-to-adults.jpg'
+    const detected = await detectObjects(tennisImage)
+    console.log('detected', detected)
+  })
+})
 </script>
 
 <template lang="pug">
