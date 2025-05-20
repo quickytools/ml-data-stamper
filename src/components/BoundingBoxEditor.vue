@@ -7,15 +7,17 @@ const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
 const x1Coordinate = ref(0); // this is the x coordinate of the mouse click
 const y1Coordinate = ref(0); // this is the y coordinate of the mouse click
-const userDrawing = ref(false);
+const userDrawing = ref(false); // this is a flag to check if the user is drawing the rectangle
 const isItDraggable = ref(false); // this is a flag to check if the user is dragging the rectangle
-const rectangle = ref({x: 0, y: 0, width: 0, height: 0, outterLayer: 10});// this is the rectangle object that will be to store the coordinates of the rectangle and rectangle size
+const rectangle = ref({x: 0, y: 0, width: 0, height: 0, outterLayer: 15});// this is the rectangle object that will be to store the coordinates of the rectangle and rectangle size
 const whereUserClicked = ref({x: 0, y:0});// this is the object that will store the coordinates of the mouse click
 const whereUserReleased = ref({x: 0, y:0});// this is the object that will store the coordinates of the mouse release
 const isResizing = ref(false); // this is a flag to check if the user is resizing the rectangle
 const sizingDirection = ref({left: false, right: false, top: false, bottom: false}); // used to check if the user is resizing the rectangle
+const hovering = ref(false); // this is a flag to check if the user is hovering over the rectangle
 
-const canvasBackground = () => {// this function is used to draw the background of the canvas
+// model function to draw the background of the canvas
+const canvasBackground = () => {
   const canvas = editorCanvas.value;
   const ctx = canvas.getContext('2d');
   const canvasWidth = canvas.width;
@@ -36,7 +38,8 @@ const canvasBackground = () => {// this function is used to draw the background 
   }
 }
 
-const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {// controller function to draw the rectangle on the canvas
+// model function to draw the rectangle on the canvas
+const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
   const canvas = editorCanvas.value;
   const ctx = canvas.getContext('2d');
 
@@ -59,14 +62,15 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {// con
   paintIt(startX, startY, width, height) // this function is used to draw the rectangle on the canvas
 }
 
-const movingRectangle = (x: number, y: number) => {// this function is called when the user drags the rectangle
+const movingRectangle = (x: number, y: number) => {// model function to move the rectangle
   const Canvas = editorCanvas.value
   const ctx = Canvas.getContext('2d')
 
   ctx.clearRect(0, 0, Canvas.width, Canvas.height);
   canvasBackground();//redraws the background
 
-  rectangle.value = {// updating the rectangle object with the new coordinates with the mouse click
+// updating the rectangle object with the new coordinates with the mouse click
+  rectangle.value = {
     x: x - whereUserClicked.value.x, // sets the new value of the rectangle object minus the x coordinate of the mouse click
     y: y - whereUserClicked.value.y, // sets the new value of the rectangle object minus the y coordinate of the mouse click
     width: rectangle.value.width,
@@ -78,7 +82,8 @@ const movingRectangle = (x: number, y: number) => {// this function is called wh
   paintIt(rectangle.value.x, rectangle.value.y, rectangle.value.width, rectangle.value.height)
 }
 
-const resizingRectangle = (x: number, y: number) => {// model function to resize the rectangle
+// model function to resize the rectangle
+const resizingRectangle = (x: number, y: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
 
@@ -117,7 +122,8 @@ const resizingRectangle = (x: number, y: number) => {// model function to resize
   paintIt(rectangle.value.x, rectangle.value.y, rectangle.value.width, rectangle.value.height)
 }
 
-const paintIt = (x: number, y: number, width: number, height: number) => {// view function for user to see the rectangle
+// view function for user to see the rectangle
+const paintIt = (x: number, y: number, width: number, height: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
   ctx.beginPath()
@@ -125,21 +131,36 @@ const paintIt = (x: number, y: number, width: number, height: number) => {// vie
   ctx.fillRect(x, y, width, height)
 }
 
-const mouseDownOnCanvas = (action: MouseEvent) =>{// controller function to check if the user is clicking on the canvas
+// helper function to check if the mouse click is inside the rectangle
+const isInRectangle = (x1Coordinate: number, y1Coordinate:number) => {
+  return x1Coordinate >= rectangle.value.x && x1Coordinate <= rectangle.value.x + rectangle.value.width
+      && y1Coordinate >= rectangle.value.y && y1Coordinate <= rectangle.value.y + rectangle.value.height
+}
+
+// helper function to get the mouse position on the canvas
+function getMousePositionOnCanvas(action: MouseEvent){
+  const canvas = editorCanvas.value; // get the canvas element
+  const canvasSpace = canvas.getBoundingClientRect(); // get the canvas position
+  const scaleX = canvas.width / canvasSpace.width; // get the scale of the canvas example: 1600/800 = 2 this mean it has double the pixel width
+  const scaleY = canvas.height / canvasSpace.height; // same as scaleX but for the height
+  return {
+    x: (action.clientX - canvasSpace.left) * scaleX, // get the x coordinate of the mouse click
+    y: (action.clientY - canvasSpace.top) * scaleY // get the y coordinate of the mouse click
+  }
+}
+
+// controller function to check if the user is clicking on the canvas
+const mouseDownOnCanvas = (action: MouseEvent) =>{
   const {x, y} = getMousePositionOnCanvas(action); // get the mouse position on the canvas
   x1Coordinate.value = x; // set the x coordinate of the mouse click
   y1Coordinate.value = y; // same as above
 
-  // resets the flags to false
-  sizingDirection.value = {
-    left: false,
-    right: false,
-    top: false,
-    bottom: false
+  whereUserReleased.value = {
+    x: x1Coordinate.value,
+    y: y1Coordinate.value
   }
 
-  if(x1Coordinate.value >= rectangle.value.x && x1Coordinate.value <= rectangle.value.x + rectangle.value.width
-      && y1Coordinate.value >= rectangle.value.y && y1Coordinate.value <= rectangle.value.y + rectangle.value.height){// check if the mouse click is inside the rectangle
+  if(isInRectangle(x1Coordinate.value, y1Coordinate.value)){// check if the mouse click is inside the rectangle
 
     whereUserClicked.value.x = x1Coordinate.value - rectangle.value.x; // get the x coordinate of the mouse click to be used to move the rectangle regardless of the mouse position in the rectangle
     whereUserClicked.value.y = y1Coordinate.value - rectangle.value.y; // same as above
@@ -176,14 +197,20 @@ const mouseUpOnCanvas = () => {// controller function to check if the user relea
   userDrawing.value = false;
   isItDraggable.value = false;
   isResizing.value = false;
-  whereUserReleased.value = {
-    x: x1Coordinate.value,
-    y: y1Coordinate.value
+  // reset the rectangle object
+  sizingDirection.value = {
+    left: false,
+    right: false,
+    top: false,
+    bottom: false
   }
 }
 
 const mouseMoveOnCanvas = (action: MouseEvent) => {// controller function to check if the user is moving the mouse on the canvas
   const {x , y} = getMousePositionOnCanvas(action); // get the mouse position on the canvas
+
+  hovering.value = isInRectangle(x, y); // check if the mouse is inside the rectangle
+
   if(isItDraggable.value){// check if the user is dragging the rectangle
     movingRectangle(x, y);
   }
@@ -194,18 +221,6 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {// controller function to che
     drawOnCanvas(x1Coordinate.value, y1Coordinate.value, action.offsetX, action.offsetY)
   }
 }
-
-function getMousePositionOnCanvas(action: MouseEvent){// helper function to get the mouse position on the canvas
-  const canvas = editorCanvas.value; // get the canvas element
-  const canvasSpace = canvas.getBoundingClientRect(); // get the canvas position
-  const scaleX = canvas.width / canvasSpace.width; // get the scale of the canvas example: 1600/800 = 2 this mean it has double the pixel width
-  const scaleY = canvas.height / canvasSpace.height; // same as scaleX but for the height
-  return {
-    x: (action.clientX - canvasSpace.left) * scaleX, // get the x coordinate of the mouse click
-    y: (action.clientY - canvasSpace.top) * scaleY // get the y coordinate of the mouse click
-  }
-}
-
 
 onMounted(() => {
   const canvasWidth = 600;
@@ -225,6 +240,7 @@ div.column
         ref="editorCanvas"
         :width='editorCanvasWidth'
         :height='editorCanvasHeight'
+        :class="{hover: hovering, dragging: isItDraggable,'resize-left': sizingDirection.left, 'resize-right': sizingDirection.right, 'resize-top': sizingDirection.top, 'resize-bottom': sizingDirection.bottom, 'top-left-corner': sizingDirection.left && sizingDirection.top, 'top-right-corner': sizingDirection.right && sizingDirection.top, 'bottom-left-corner': sizingDirection.left && sizingDirection.bottom, 'bottom-right-corner': sizingDirection.right && sizingDirection.bottom}"
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
@@ -235,5 +251,35 @@ div.column
 <style scoped>
   canvas {
     cursor:crosshair;
+  }
+  .hover {
+    cursor: grab;
+  }
+  .dragging {
+  cursor: grabbing;
+  }
+  .resize-left {
+    cursor: w-resize;
+  }
+  .resize-right {
+    cursor: e-resize;
+  }
+  .resize-top {
+    cursor: n-resize;
+  }
+  .resize-bottom {
+    cursor: s-resize;
+  }
+  .top-left-corner {
+    cursor: nw-resize;
+  }
+  .top-right-corner {
+    cursor: ne-resize;
+  }
+  .bottom-left-corner {
+    cursor: sw-resize;
+  }
+  .bottom-right-corner {
+    cursor: se-resize;
   }
 </style>
