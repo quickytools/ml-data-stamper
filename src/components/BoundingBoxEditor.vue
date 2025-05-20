@@ -15,6 +15,7 @@ const whereUserReleased = ref({x: 0, y:0});// this is the object that will store
 const isResizing = ref(false); // this is a flag to check if the user is resizing the rectangle
 const sizingDirection = ref({left: false, right: false, top: false, bottom: false}); // used to check if the user is resizing the rectangle
 const hovering = ref(false); // this is a flag to check if the user is hovering over the rectangle
+const crosshair = ref(false); // this is a flag to check if the user is hovering over the canvas
 
 // model function to draw the background of the canvas
 const canvasBackground = () => {
@@ -45,6 +46,7 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height); // these two lines of code help to clear the blurred lines, or having a trail effect
   canvasBackground();// this redraws the background
+  crosshair.value = true; // this is used to show the crosshair cursor when the user is drawing
 
   const startX = Math.min(x1, x2);
   const startY = Math.min(y1, y2);
@@ -69,7 +71,7 @@ const movingRectangle = (x: number, y: number) => {// model function to move the
   ctx.clearRect(0, 0, Canvas.width, Canvas.height);
   canvasBackground();//redraws the background
 
-// updating the rectangle object with the new coordinates with the mouse click
+// updating the rectangle object with the new coordinates and size with the mouse click
   rectangle.value = {
     x: x - whereUserClicked.value.x, // sets the new value of the rectangle object minus the x coordinate of the mouse click
     y: y - whereUserClicked.value.y, // sets the new value of the rectangle object minus the y coordinate of the mouse click
@@ -209,7 +211,9 @@ const mouseUpOnCanvas = () => {// controller function to check if the user relea
 const mouseMoveOnCanvas = (action: MouseEvent) => {// controller function to check if the user is moving the mouse on the canvas
   const {x , y} = getMousePositionOnCanvas(action); // get the mouse position on the canvas
 
-  hovering.value = isInRectangle(x, y); // check if the mouse is inside the rectangle
+  if(!isItDraggable.value && !isResizing.value && !userDrawing.value){ // check if the user is not dragging or resizing the rectangle
+    hovering.value = isInRectangle(x, y); // check if the mouse is inside the rectangle if it is, set the flag to true and show a opened hand cursor.
+  }
 
   if(isItDraggable.value){// check if the user is dragging the rectangle
     movingRectangle(x, y);
@@ -240,7 +244,7 @@ div.column
         ref="editorCanvas"
         :width='editorCanvasWidth'
         :height='editorCanvasHeight'
-        :class="{hover: hovering, dragging: isItDraggable,'resize-left': sizingDirection.left, 'resize-right': sizingDirection.right, 'resize-top': sizingDirection.top, 'resize-bottom': sizingDirection.bottom, 'top-left-corner': sizingDirection.left && sizingDirection.top, 'top-right-corner': sizingDirection.right && sizingDirection.top, 'bottom-left-corner': sizingDirection.left && sizingDirection.bottom, 'bottom-right-corner': sizingDirection.right && sizingDirection.bottom}"
+        :class="{canvas: crosshair, hover: hovering, dragging: isItDraggable,'resize-left': sizingDirection.left, 'resize-right': sizingDirection.right, 'resize-top': sizingDirection.top, 'resize-bottom': sizingDirection.bottom, 'top-left-corner': sizingDirection.left && sizingDirection.top, 'top-right-corner': sizingDirection.right && sizingDirection.top, 'bottom-left-corner': sizingDirection.left && sizingDirection.bottom, 'bottom-right-corner': sizingDirection.right && sizingDirection.bottom}"
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
