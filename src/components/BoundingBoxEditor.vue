@@ -4,37 +4,73 @@ import { ref, onMounted, nextTick } from 'vue'
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
-const x1Coordinate = ref(0) // this is the x coordinate of the mouse click
-const y1Coordinate = ref(0) // this is the y coordinate of the mouse click
-const userDrawing = ref(false) // this is a flag to check if the user is drawing the rectangle
-const isItDraggable = ref(false) // this is a flag to check if the user is dragging the rectangle
-const rectangle = ref({ x: 0, y: 0, width: 0, height: 0, outterLayer: 15 }) // this is the rectangle object that will be to store the coordinates of the rectangle and rectangle size
-const whereUserClicked = ref({ x: 0, y: 0 }) // this is the object that will store the coordinates of the mouse click
-const whereUserReleased = ref({ x: 0, y: 0 }) // this is the object that will store the coordinates of the mouse release
-const isResizing = ref(false) // this is a flag to check if the user is resizing the rectangle
-const sizingDirection = ref({ left: false, right: false, top: false, bottom: false }) // used to check if the user is resizing the rectangle
-const hovering = ref(false) // this is a flag to check if the user is hovering over the rectangle
-const crosshair = ref(false) // this is a flag to check if the user is hovering over the canvas
+const controller = ref({ userDrawing: false, isItDraggable: false, isResizing: false }) // this is the controller object that will be used to control the annotation box
+const whereUserClicked = { x: 0, y: 0 } // this is the object that will store the coordinates of the mouse click
+const coordinate = { x: 0, y: 0 } //
+const cursor = ref({
+  sizingDirection: { left: false, right: false, top: false, bottom: false },
+  hovering: false,
+  crosshair: false,
+})
+let rectangle = {
+  // annotation box
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+  outterLayer: 15,
+  contains: function (coordinate: { x: number; y: number }) {
+    return (
+      coordinate.x >= this.x &&
+      coordinate.x <= this.x + this.width &&
+      coordinate.y >= this.y &&
+      coordinate.y <= this.y + this.height
+    )
+  },
+  outterZoneDetects: function (coordinate: { x: number; y: number }) {
+    return (
+      coordinate.x >= this.x - this.outterLayer &&
+      coordinate.x <= this.x + this.width + this.outterLayer &&
+      coordinate.y >= this.y - this.outterLayer &&
+      coordinate.y <= this.y + this.height + this.outterLayer
+    )
+  },
+  updating: function (x: number, y: number, width: number, height: number) {
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+  },
+  checkLeftZone: function (coordinate: { x: number }) {
+    return coordinate.x >= this.x - this.outterLayer && coordinate.x <= this.x
+  },
+}
 
-// model function to draw the background of the canvas
-const canvasBackground = () => {
-  const canvas = editorCanvas.value
+function drawCheckerboard(canvas, lightColor: string, darkColor: string) {
   const ctx = canvas.getContext('2d')
   const canvasWidth = canvas.width
   const canvasHeight = canvas.height
-
   // checkerboard pattern utilizes Odd and Even rows and columns to create a pattern
   for (let i = 0; i <= canvasHeight / 10; i++) {
     for (let j = 0; j <= canvasWidth / 10; j++) {
       if ((j + i) % 2 === 0) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.80)'
+        ctx.fillStyle = lightColor
         ctx.fillRect(j * 10, i * 10, 10, 10)
       } else {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)' // the very last value changes the transparency of the darker boxes.
+        ctx.fillStyle = darkColor
         ctx.fillRect(j * 10, i * 10, 10, 10)
       }
     }
   }
+}
+
+// controller function to draw the background of the canvas
+const canvasBackground = () => {
+  const canvas = editorCanvas.value
+  const lightColor = 'rgba(255, 255, 255, 0.80)'
+  const darkColor = 'rgba(0, 0, 0, 0.05)'
+
+  drawCheckerboard(canvas, lightColor, darkColor)
 }
 
 // model function to draw the rectangle on the canvas
@@ -44,26 +80,29 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height) // these two lines of code help to clear the blurred lines, or having a trail effect
   canvasBackground() // this redraws the background
-  crosshair.value = true // this is used to show the crosshair cursor when the user is drawing
+  cursor.value.crosshair = true // this is used to show the crosshair cursor when the user is drawing
 
   const startX = Math.min(x1, x2)
   const startY = Math.min(y1, y2)
   const width = Math.abs(x2 - x1) // subtracting coordinates gives the distance between two areas
   const height = Math.abs(y2 - y1)
 
-  rectangle.value = {
+  rectangle = {
     x: startX,
     y: startY,
     width: width,
     height: height,
-    outterLayer: rectangle.value.outterLayer,
+    outterLayer: rectangle.outterLayer,
+    contains: rectangle.contains,
+    outterZoneDetects: rectangle.outterZoneDetects,
+    checkLeftZone: rectangle.checkLeftZone,
   } // this is the rectangle object that will be to store the coordinates of the rectangle
 
   paintIt(startX, startY, width, height) // this function is used to draw the rectangle on the canvas
 }
 
+// model function to move the rectangle
 const movingRectangle = (x: number, y: number) => {
-  // model function to move the rectangle
   const Canvas = editorCanvas.value
   const ctx = Canvas.getContext('2d')
 
@@ -71,16 +110,23 @@ const movingRectangle = (x: number, y: number) => {
   canvasBackground() //redraws the background
 
   // updating the rectangle object with the new coordinates and size with the mouse click
-  rectangle.value = {
-    x: x - whereUserClicked.value.x, // sets the new value of the rectangle object minus the x coordinate of the mouse click
-    y: y - whereUserClicked.value.y, // sets the new value of the rectangle object minus the y coordinate of the mouse click
-    width: rectangle.value.width,
-    height: rectangle.value.height,
-    outterLayer: rectangle.value.outterLayer,
+  rectangle.x = x - whereUserClicked.x // this is used to move the rectangle with the mouse click
+  rectangle.y = y - whereUserClicked.y // same as above
+  rectangle.width = rectangle.width // width remains the same
+  rectangle.height = rectangle.height // height remains the same
+  rectangle = {
+    x: x - whereUserClicked.x,
+    y: y - whereUserClicked.y,
+    width: rectangle.width,
+    height: rectangle.height,
+    outterLayer: rectangle.outterLayer,
+    contains: rectangle.contains,
+    outterZoneDetects: rectangle.outterZoneDetects,
+    checkLeftZone: rectangle.checkLeftZone,
   }
 
   // drawing rectangle on the canvas
-  paintIt(rectangle.value.x, rectangle.value.y, rectangle.value.width, rectangle.value.height)
+  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
 }
 
 // model function to resize the rectangle
@@ -92,35 +138,35 @@ const resizingRectangle = (x: number, y: number) => {
   canvasBackground()
 
   // Handle each side resizing
-  if (sizingDirection.value.left) {
-    const newWidth = rectangle.value.x + rectangle.value.width - x
-    if (newWidth >= rectangle.value.outterLayer) {
-      rectangle.value.x = x
-      rectangle.value.width = newWidth
+  if (cursor.value.sizingDirection.left) {
+    const newWidth = rectangle.x + rectangle.width - x
+    if (newWidth >= rectangle.outterLayer) {
+      rectangle.x = x
+      rectangle.width = newWidth
     }
   }
-  if (sizingDirection.value.right) {
-    const newWidth = x - rectangle.value.x
-    if (newWidth >= rectangle.value.outterLayer) {
-      rectangle.value.width = newWidth
+  if (cursor.value.sizingDirection.right) {
+    const newWidth = x - rectangle.x
+    if (newWidth >= rectangle.outterLayer) {
+      rectangle.width = newWidth
     }
   }
-  if (sizingDirection.value.top) {
-    const newHeight = rectangle.value.y + rectangle.value.height - y
-    if (newHeight >= rectangle.value.outterLayer) {
-      rectangle.value.y = y
-      rectangle.value.height = newHeight
+  if (cursor.value.sizingDirection.top) {
+    const newHeight = rectangle.y + rectangle.height - y
+    if (newHeight >= rectangle.outterLayer) {
+      rectangle.y = y
+      rectangle.height = newHeight
     }
   }
-  if (sizingDirection.value.bottom) {
-    const newHeight = y - rectangle.value.y
-    if (newHeight >= rectangle.value.outterLayer) {
-      rectangle.value.height = newHeight
+  if (cursor.value.sizingDirection.bottom) {
+    const newHeight = y - rectangle.y
+    if (newHeight >= rectangle.outterLayer) {
+      rectangle.height = newHeight
     }
   }
 
   // Draw the resized rectangle
-  paintIt(rectangle.value.x, rectangle.value.y, rectangle.value.width, rectangle.value.height)
+  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
 }
 
 // view function for user to see the rectangle
@@ -130,16 +176,6 @@ const paintIt = (x: number, y: number, width: number, height: number) => {
   ctx.beginPath()
   ctx.fillStyle = 'rgba(255, 0, 0, 0.05)'
   ctx.fillRect(x, y, width, height)
-}
-
-// helper function to check if the mouse click is inside the rectangle
-const isInRectangle = (x1Coordinate: number, y1Coordinate: number) => {
-  return (
-    x1Coordinate >= rectangle.value.x &&
-    x1Coordinate <= rectangle.value.x + rectangle.value.width &&
-    y1Coordinate >= rectangle.value.y &&
-    y1Coordinate <= rectangle.value.y + rectangle.value.height
-  )
 }
 
 // helper function to get the mouse position on the canvas
@@ -156,68 +192,60 @@ function getMousePositionOnCanvas(action: MouseEvent) {
 
 // controller function to check if the user is clicking on the canvas
 const mouseDownOnCanvas = (action: MouseEvent) => {
+  const noController = controller.value
   const { x, y } = getMousePositionOnCanvas(action) // get the mouse position on the canvas
-  x1Coordinate.value = x // set the x coordinate of the mouse click
-  y1Coordinate.value = y // same as above
+  coordinate.x = x // set the x coordinate of the mouse click
+  coordinate.y = y // same as above
 
-  whereUserReleased.value = {
-    x: x1Coordinate.value,
-    y: y1Coordinate.value,
-  }
-
-  if (isInRectangle(x1Coordinate.value, y1Coordinate.value)) {
+  if (rectangle.contains(coordinate)) {
     // check if the mouse click is inside the rectangle
 
-    whereUserClicked.value.x = x1Coordinate.value - rectangle.value.x // get the x coordinate of the mouse click to be used to move the rectangle regardless of the mouse position in the rectangle
-    whereUserClicked.value.y = y1Coordinate.value - rectangle.value.y // same as above
+    whereUserClicked.x = coordinate.x - rectangle.x // get the x coordinate of the mouse click to be used to move the rectangle regardless of the mouse position in the rectangle
+    whereUserClicked.y = coordinate.y - rectangle.y // same as above
 
-    userDrawing.value = false
-    isItDraggable.value = true // set the flag to true once the user in the rectangle
-    isResizing.value = false
+    controller.value = {
+      ...noController,
+      isItDraggable: true, // set the flag to true if the user is dragging the rectangle
+    }
   }
-
   // check if the mouse click is on the outter layer of the rectangle
-  else if (
-    x1Coordinate.value >= rectangle.value.x - rectangle.value.outterLayer &&
-    x1Coordinate.value <= rectangle.value.x + rectangle.value.width + rectangle.value.outterLayer &&
-    y1Coordinate.value >= rectangle.value.y - rectangle.value.outterLayer &&
-    y1Coordinate.value <= rectangle.value.y + rectangle.value.height + rectangle.value.outterLayer
-  ) {
+  else if (rectangle.outterZoneDetects(coordinate)) {
     // check if the mouse click is on the left side of the rectangle changes to true if the mouse click is on the left side of the rectangle
-    sizingDirection.value.left =
-      x1Coordinate.value >= rectangle.value.x - rectangle.value.outterLayer &&
-      x1Coordinate.value <= rectangle.value.x
+    cursor.value.sizingDirection.left = rectangle.checkLeftZone(coordinate)
     // check if the mouse click is on the right side of the rectangle changes to true if the mouse click is on the right side of the rectangle
-    sizingDirection.value.right =
-      x1Coordinate.value >= rectangle.value.x + rectangle.value.width &&
-      x1Coordinate.value <= rectangle.value.x + rectangle.value.width + rectangle.value.outterLayer
+    cursor.value.sizingDirection.right =
+      coordinate.x >= rectangle.x + rectangle.width &&
+      coordinate.x <= rectangle.x + rectangle.width + rectangle.outterLayer
     // check if the mouse click is on the top side of the rectangle changes to true if the mouse click is on the top side of the rectangle
-    sizingDirection.value.top =
-      y1Coordinate.value >= rectangle.value.y - rectangle.value.outterLayer &&
-      y1Coordinate.value <= rectangle.value.y
+    cursor.value.sizingDirection.top =
+      coordinate.y >= rectangle.y - rectangle.outterLayer && coordinate.y <= rectangle.y
     // check if the mouse click is on the bottom side of the rectangle changes to true if the mouse click is on the bottom side of the rectangle
-    sizingDirection.value.bottom =
-      y1Coordinate.value >= rectangle.value.y + rectangle.value.height &&
-      y1Coordinate.value <= rectangle.value.y + rectangle.value.height + rectangle.value.outterLayer
+    cursor.value.sizingDirection.bottom =
+      coordinate.y >= rectangle.y + rectangle.height &&
+      coordinate.y <= rectangle.y + rectangle.height + rectangle.outterLayer
 
-    userDrawing.value = false
-    isItDraggable.value = false
-    isResizing.value = true // set the flag to true if the user is resizing the rectangle
+    controller.value = {
+      ...noController,
+      isResizing: true, // set the flag to true if the user is resizing the rectangle
+    }
   } else {
-    userDrawing.value = true // set the flag to true if the user is drawing
-    isItDraggable.value = false
-    isResizing.value = false
+    controller.value = {
+      ...noController,
+      userDrawing: true, // set the flag to true if the user is drawing
+    }
   }
 }
 
 const mouseUpOnCanvas = () => {
   // controller function to check if the user releases the mouse button on the canvas
   // changes the flags to false
-  userDrawing.value = false
-  isItDraggable.value = false
-  isResizing.value = false
+  controller.value = {
+    userDrawing: false,
+    isItDraggable: false,
+    isResizing: false,
+  }
   // reset the rectangle object
-  sizingDirection.value = {
+  cursor.value.sizingDirection = {
     left: false,
     right: false,
     top: false,
@@ -228,21 +256,26 @@ const mouseUpOnCanvas = () => {
 const mouseMoveOnCanvas = (action: MouseEvent) => {
   // controller function to check if the user is moving the mouse on the canvas
   const { x, y } = getMousePositionOnCanvas(action) // get the mouse position on the canvas
+  const temp = { x: x, y: y } // store the mouse position in a temporary variable
 
-  if (!isItDraggable.value && !isResizing.value && !userDrawing.value) {
+  if (
+    !controller.value.isItDraggable &&
+    !controller.value.isResizing &&
+    !controller.value.userDrawing
+  ) {
     // check if the user is not dragging or resizing the rectangle
-    hovering.value = isInRectangle(x, y) // check if the mouse is inside the rectangle if it is, set the flag to true and show a opened hand cursor.
+    cursor.value.hovering = rectangle.contains(temp)
   }
 
-  if (isItDraggable.value) {
+  if (controller.value.isItDraggable) {
     // check if the user is dragging the rectangle
     movingRectangle(x, y)
-  } else if (isResizing.value) {
+  } else if (controller.value.isResizing) {
     // check if the user is resizing the rectangle
     resizingRectangle(x, y)
-  } else if (userDrawing.value) {
+  } else if (controller.value.userDrawing) {
     // check if the user is drawing
-    drawOnCanvas(x1Coordinate.value, y1Coordinate.value, action.offsetX, action.offsetY)
+    drawOnCanvas(coordinate.x, coordinate.y, x, y)
   }
 }
 
@@ -264,12 +297,12 @@ div.column
         ref="editorCanvas"
         :width='editorCanvasWidth'
         :height='editorCanvasHeight'
-        :class="{canvas: crosshair, hover: hovering, dragging: isItDraggable,'resize-left': sizingDirection.left, 'resize-right': sizingDirection.right, 'resize-top': sizingDirection.top, 'resize-bottom': sizingDirection.bottom, 'top-left-corner': sizingDirection.left && sizingDirection.top, 'top-right-corner': sizingDirection.right && sizingDirection.top, 'bottom-left-corner': sizingDirection.left && sizingDirection.bottom, 'bottom-right-corner': sizingDirection.right && sizingDirection.bottom}"
+        :class="{canvas: cursor.crosshair, hover: cursor.hovering, dragging: controller.isItDraggable,'resize-left': cursor.sizingDirection.left, 'resize-right': cursor.sizingDirection.right, 'resize-top': cursor.sizingDirection.top, 'resize-bottom': cursor.sizingDirection.bottom, 'top-left-corner': cursor.sizingDirection.left && cursor.sizingDirection.top, 'top-right-corner': cursor.sizingDirection.right && cursor.sizingDirection.top, 'bottom-left-corner': cursor.sizingDirection.left && cursor.sizingDirection.bottom, 'bottom-right-corner': cursor.sizingDirection.right && cursor.sizingDirection.bottom}"
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
     )
-    p Click and drag to draw a bounding box. user clicked on x: {{whereUserReleased.x}}, y: {{whereUserReleased.y}}. Click and drag to move the rectangle.
+    p
 </template>
 
 <style scoped>
