@@ -4,13 +4,21 @@ import { ref, onMounted, nextTick } from 'vue'
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
-const controller = ref({ isDrawing: false, isDraggable: false, isResizing: false }) // this is the controller object that will be used to control the annotation box
-const coordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
+const scale = ref(1) // this is the scale factor for the canvas, used for zooming in and out
+const controller = ref({
+  isDrawing: false,
+  isDraggable: false,
+  isResizing: false,
+  isPanning: false,
+}) // this is the controller object that will be used to control the annotation box
 const cursor = ref({
   sizingDirection: { left: false, right: false, top: false, bottom: false },
   hovering: false,
   crosshair: false,
 })
+const panOffset = ref({ x: 0, y: 0 })
+const lastPanPosition = ref({ x: 0, y: 0 })
+const coordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
 const rectangle = {
   // annotation box
   x: 0,
@@ -45,7 +53,6 @@ const rectangle = {
     this.y = y - this.whereUserClicked.y
   },
   checkLeftZone: function (coordinate: { x: number }) {
-    //
     return coordinate.x >= this.x - this.outterLayer && coordinate.x <= this.x
   },
   checkRightZone: function (coordinate: { x: number }) {
@@ -82,16 +89,38 @@ function drawCheckerboard(canvas, lightColor: string, darkColor: string) {
   }
 }
 
-// controller function to draw the background of the canvas
 const canvasBackground = () => {
   const canvas = editorCanvas.value
   const lightColor = 'rgba(255, 255, 255, 0.80)'
   const darkColor = 'rgba(0, 0, 0, 0.05)'
-
   drawCheckerboard(canvas, lightColor, darkColor)
 }
 
-// model function to draw the rectangle on the canvas
+const zoom = (coordinate: { x: number; y: number }, deltaY: number) => {
+  const canvas = editorCanvas.value
+  const ctx = canvas.getContext('2d')
+  let newScale = scale.value + deltaY * -0.01 // Adjust the zoom speed as needed
+
+  const minimunScale = Math.max(
+    editorCanvasWidth.value / canvas.width,
+    editorCanvasHeight.value / canvas.height,
+  )
+  newScale = Math.min(Math.max(minimunScale, newScale), 5) // range between 0.1 and 10 doesn't go below the minimum scale or above the maximum scale
+  scale.value = newScale
+  ctx.setTransform(
+    newScale,
+    0,
+    0,
+    newScale,
+    coordinate.x - coordinate.x * newScale, // adjust the viewport to zoom in and out where the mouse is
+    coordinate.y - coordinate.y * newScale,
+  )
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  canvasBackground() // redraws the background
+
+  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height) // redraw the rectangle
+}
+
 const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
@@ -102,7 +131,7 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
 
   const startX = Math.min(x1, x2)
   const startY = Math.min(y1, y2)
-  const width = Math.abs(x2 - x1) // subtracting coordinates gives the distance between two areas
+  const width = Math.abs(x2 - x1)
   const height = Math.abs(y2 - y1)
 
   // storing the rectangle coordinates and size in the rectangle object
@@ -125,7 +154,6 @@ const movingRectangle = (x: number, y: number) => {
   // updating the rectangle object with the new coordinates and size with the mouse click
   rectangle.move(x, y)
 
-  // drawing rectangle on the canvas
   paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
 }
 
@@ -165,7 +193,6 @@ const resizingRectangle = (x: number, y: number) => {
     }
   }
 
-  // Draw the resized rectangle
   paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
 }
 
@@ -178,19 +205,25 @@ const paintIt = (x: number, y: number, width: number, height: number) => {
   ctx.fillRect(x, y, width, height)
 }
 
-// helper function to get the mouse position on the canvas
 function getMousePositionOnCanvas(action: MouseEvent) {
   const canvas = editorCanvas.value
+  const ctx = canvas.getContext('2d')
   const canvasSpace = canvas.getBoundingClientRect()
-  const scaleX = canvas.width / canvasSpace.width // get the scale of the canvas example: 1600/800 = 2 this mean it has double the pixel width
-  const scaleY = canvas.height / canvasSpace.height
+
+  // Get the current transform matrix
+  const transform = ctx.getTransform()
+
+  const x = (action.clientX - canvasSpace.left) * (canvas.width / canvasSpace.width) // canvasSpace.width is the width of the canvas in pixels and canvas.width is the width of the canvas in pixels after scaling
+  const y = (action.clientY - canvasSpace.top) * (canvas.height / canvasSpace.height)
+
+  const transformedPoint = new DOMPoint(x, y).matrixTransform(transform.inverse()) //
+
   return {
-    x: (action.clientX - canvasSpace.left) * scaleX,
-    y: (action.clientY - canvasSpace.top) * scaleY,
+    x: transformedPoint.x,
+    y: transformedPoint.y,
   }
 }
 
-// controller function to check if the user is clicking on the canvas, if the user is clicking on the rectangle, if the user is clicking on the outter zone of the rectangle, or if the user is drawing a new rectangle.
 const mouseDownOnCanvas = (action: MouseEvent) => {
   const noController = controller.value
   const { x, y } = getMousePositionOnCanvas(action)
@@ -222,8 +255,15 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
   }
 }
 
+const mouseWheelOnCanvas = (action: WheelEvent) => {
+  action.preventDefault() // prevent the default scrolling behavior
+  const { x, y } = getMousePositionOnCanvas(action)
+  coordinate.x = x
+  coordinate.y = y
+  zoom(coordinate, action.deltaY)
+}
+
 const mouseUpOnCanvas = () => {
-  // controller function to check if the user releases the mouse button on the canvas. Resets the controller flags and cursor state
   controller.value = {
     isDrawing: false,
     isDraggable: false,
@@ -238,7 +278,6 @@ const mouseUpOnCanvas = () => {
 }
 
 const mouseMoveOnCanvas = (action: MouseEvent) => {
-  // controller function to check if the user is moving the mouse on the canvas
   const { x, y } = getMousePositionOnCanvas(action)
   const temp = { x: x, y: y }
 
@@ -282,6 +321,7 @@ div.column
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
+        @wheel="mouseWheelOnCanvas"
     )
     p
 </template>
