@@ -16,8 +16,11 @@ const cursor = ref({
   hovering: false,
   crosshair: false,
 })
-const panOffset = ref({ x: 0, y: 0 })
-const lastPanPosition = ref({ x: 0, y: 0 })
+const panState = ref({
+  // this holds the state of the panning functionality
+  offSet: { x: 0, y: 0 },
+  lastPosition: { x: 0, y: 0 },
+})
 const coordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
 const rectangle = {
   // annotation box
@@ -99,26 +102,83 @@ const canvasBackground = () => {
 const zoom = (coordinate: { x: number; y: number }, deltaY: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
-  let newScale = scale.value + deltaY * -0.01 // Adjust the zoom speed as needed
+  const prevScale = scale.value
 
-  const minimunScale = Math.max(
+  let newScale = prevScale + deltaY * -0.01 // Adjust the zoom speed as needed
+
+  const minimumScale = Math.max(
     editorCanvasWidth.value / canvas.width,
     editorCanvasHeight.value / canvas.height,
   )
-  newScale = Math.min(Math.max(minimunScale, newScale), 5) // range between 0.1 and 10 doesn't go below the minimum scale or above the maximum scale
+
+  newScale = Math.min(Math.max(minimumScale, newScale), 5) // range between 0.1 and 5 doesn't go below the minimum scale or above the maximum scale
+
+  const scaleChange = newScale / prevScale
+
+  const newPanOffSetX = coordinate.x - (coordinate.x - panState.value.offSet.x) * scaleChange // where the mouse is when zooming in and out
+  const newPanOffSetY = coordinate.y - (coordinate.y - panState.value.offSet.y) * scaleChange
+
+  const limitOffSet = canvasBoundary(newPanOffSetX, newPanOffSetY, newScale)
+  panState.value.offSet = limitOffSet // limit the pan offset to the canvas boundary
   scale.value = newScale
   ctx.setTransform(
     newScale,
     0,
     0,
     newScale,
-    coordinate.x - coordinate.x * newScale, // adjust the viewport to zoom in and out where the mouse is
-    coordinate.y - coordinate.y * newScale,
+    limitOffSet.x, // adjust the viewport to zoom in and out where the mouse is
+    limitOffSet.y,
   )
+
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   canvasBackground() // redraws the background
-
   paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height) // redraw the rectangle
+}
+
+const moveCanvasView = (action: MouseEvent) => {
+  const deltaX = action.clientX - panState.value.lastPosition.x // calculate the difference in mouse position from the last position
+  const deltaY = action.clientY - panState.value.lastPosition.y
+  const newPan = {
+    x: panState.value.offSet.x + deltaX,
+    y: panState.value.offSet.y + deltaY,
+  }
+  const limitOffset = canvasBoundary(newPan.x, newPan.y, undefined)
+  panState.value.offSet = limitOffset // limit the pan offset to the canvas boundary and set the new pan offset
+  panState.value.lastPosition = { x: action.clientX, y: action.clientY } // update the last pan position to the current mouse position
+
+  const canvas = editorCanvas.value
+  const ctx = canvas.getContext('2d')
+  ctx.setTransform(
+    scale.value,
+    0,
+    0,
+    scale.value,
+    limitOffset.x, // adjust the viewport to pan where the mouse is
+    limitOffset.y,
+  )
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  canvasBackground()
+  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height) // redraw the rectangl
+}
+
+const canvasBoundary = (panX: number, panY: number, newScale: number | undefined) => {
+  const canvas = editorCanvas.value
+  // Calculate how much the canvas has grown due to scaling
+  const scaleToUse = newScale != null ? newScale : scale.value
+  const scaledWidth = canvas.width * scaleToUse
+  const scaledHeight = canvas.height * scaleToUse
+
+  // Calculate maximum allowed pan distances
+  const viewWidth = editorCanvasWidth.value
+  const viewHeight = editorCanvasHeight.value
+
+  const minPanX = viewWidth - scaledWidth
+  const minPanY = viewHeight - scaledHeight
+
+  return {
+    x: Math.min(Math.max(panX, minPanX), 0),
+    y: Math.min(Math.max(panY, minPanY), 0),
+  }
 }
 
 const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
@@ -213,10 +273,10 @@ function getMousePositionOnCanvas(action: MouseEvent) {
   // Get the current transform matrix
   const transform = ctx.getTransform()
 
-  const x = (action.clientX - canvasSpace.left) * (canvas.width / canvasSpace.width) // canvasSpace.width is the width of the canvas in pixels and canvas.width is the width of the canvas in pixels after scaling
+  const x = (action.clientX - canvasSpace.left) * (canvas.width / canvasSpace.width) // canvasSpace.width is the width of the canvas in pixels and canvas.
   const y = (action.clientY - canvasSpace.top) * (canvas.height / canvasSpace.height)
 
-  const transformedPoint = new DOMPoint(x, y).matrixTransform(transform.inverse()) //
+  const transformedPoint = new DOMPoint(x, y).matrixTransform(transform.inverse())
 
   return {
     x: transformedPoint.x,
@@ -230,7 +290,13 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
   coordinate.x = x
   coordinate.y = y
 
-  if (rectangle.contains(coordinate)) {
+  if (action.button === 0 && action.ctrlKey) {
+    controller.value = {
+      ...noController,
+      isPanning: true,
+    }
+    panState.value.lastPosition = { x: action.clientX, y: action.clientY }
+  } else if (rectangle.contains(coordinate)) {
     rectangle.storeUserClick(coordinate)
 
     controller.value = {
@@ -268,6 +334,7 @@ const mouseUpOnCanvas = () => {
     isDrawing: false,
     isDraggable: false,
     isResizing: false,
+    isPanning: false,
   }
   cursor.value.sizingDirection = {
     left: false,
@@ -290,7 +357,9 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
     cursor.value.hovering = rectangle.contains(temp)
   }
 
-  if (controller.value.isDraggable) {
+  if (controller.value.isPanning) {
+    moveCanvasView(action)
+  } else if (controller.value.isDraggable) {
     movingRectangle(x, y)
   } else if (controller.value.isResizing) {
     resizingRectangle(x, y)
@@ -323,7 +392,7 @@ div.column
         @mouseup="mouseUpOnCanvas"
         @wheel="mouseWheelOnCanvas"
     )
-    p
+    p Use mouse wheel to zoom. Use Ctrl + left mouse click to move around the canvas after zooming.
 </template>
 
 <style scoped>
