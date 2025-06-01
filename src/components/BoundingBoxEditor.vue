@@ -392,7 +392,7 @@ div.column
         @mouseup="mouseUpOnCanvas"
         @wheel="mouseWheelOnCanvas"
     )
-    p
+    p Use mouse wheel to zoom. Use Ctrl + left mouse click to move around the canvas after zooming.
 </template>
 
 <style scoped>
