@@ -16,11 +16,24 @@ const cursor = ref({
   hovering: false,
   crosshair: false,
 })
-const panState = ref({
-  // this holds the state of the panning functionality
-  offSet: { x: 0, y: 0 },
-  lastPosition: { x: 0, y: 0 },
-})
+const panState = {
+  zeroCoordinates: { x: 0, y: 0 },
+  startPanCoordinates: { x: 0, y: 0 },
+  onStart: function (zeroCoordinates, startPanCoordinates) {
+    this.zeroCoordinates = zeroCoordinates
+    this.startPanCoordinates = startPanCoordinates
+  },
+  onMove: function (currentPanCoordinates) {
+    const { x: zx, y: zy } = this.zeroCoordinates
+    const { x: sx, y: sy } = this.startPanCoordinates
+    const { x, y } = currentPanCoordinates
+    return {
+      x: zx + x - sx,
+      y: zy + y - sy,
+    }
+  },
+}
+
 const coordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
 const rectangle = {
   // annotation box
@@ -30,6 +43,15 @@ const rectangle = {
   height: 0,
   outterLayer: 15,
   whereUserClicked: { x: 0, y: 0 },
+  isDefined: function () {
+    return this.width > 0 && this.height > 0
+  },
+  getBoundingTransform: function (viewXform) {
+    // TODO Center on view bounds
+    const { a } = viewXform
+    const inverseScale = a > 0 ? 1 / a : 1
+    return new DOMMatrix([a, 0, 0, a, -this.x * a, -this.y * a])
+  },
   storeUserClick: function (coordinate: { x: number; y: number }) {
     this.whereUserClicked.x = coordinate.x - this.x
     this.whereUserClicked.y = coordinate.y - this.y
@@ -43,7 +65,6 @@ const rectangle = {
     )
   },
   outterZoneDetection: function (coordinate: { x: number; y: number }) {
-    //
     return (
       coordinate.x >= this.x - this.outterLayer &&
       coordinate.x <= this.x + this.width + this.outterLayer &&
@@ -133,9 +154,6 @@ const zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
     .translate(-x, -y)
     .multiply(xform)
 
-  const limitOffSet = canvasBoundary(updatedXform.e, updatedXform.f, newScale)
-
-  panState.value.offSet = limitOffSet
   scale.value = newScale
 
   ctx.setTransform(updatedXform)
@@ -145,49 +163,14 @@ const zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
 }
 
 const moveCanvasView = (action: MouseEvent) => {
-  const deltaX = action.clientX - panState.value.lastPosition.x // calculate the difference in mouse position from the last position
-  const deltaY = action.clientY - panState.value.lastPosition.y
-  const newPan = {
-    x: panState.value.offSet.x + deltaX,
-    y: panState.value.offSet.y + deltaY,
-  }
-  const limitOffset = canvasBoundary(newPan.x, newPan.y, undefined)
-  panState.value.offSet = limitOffset // limit the pan offset to the canvas boundary and set the new pan offset
-  panState.value.lastPosition = { x: action.clientX, y: action.clientY } // update the last pan position to the current mouse position
+  const currentCoordinates = { x: action.clientX, y: action.clientY }
+  const { x, y } = panState.onMove(currentCoordinates)
+  const ctx = editorCanvas.value.getContext('2d')
+  const { a } = ctx.getTransform()
+  ctx.setTransform(a, 0, 0, a, x, y)
 
-  const canvas = editorCanvas.value
-  const ctx = canvas.getContext('2d')
-  ctx.setTransform(
-    scale.value,
-    0,
-    0,
-    scale.value,
-    limitOffset.x, // adjust the viewport to pan where the mouse is
-    limitOffset.y,
-  )
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
   canvasBackground()
-  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height) // redraw the rectangl
-}
-
-const canvasBoundary = (panX: number, panY: number, newScale: number | undefined) => {
-  const canvas = editorCanvas.value
-  // Calculate how much the canvas has grown due to scaling
-  const scaleToUse = newScale != null ? newScale : scale.value
-  const scaledWidth = canvas.width * scaleToUse
-  const scaledHeight = canvas.height * scaleToUse
-
-  // Calculate maximum allowed pan distances
-  const viewWidth = editorCanvasWidth.value
-  const viewHeight = editorCanvasHeight.value
-
-  const minPanX = viewWidth - scaledWidth
-  const minPanY = viewHeight - scaledHeight
-
-  return {
-    x: Math.min(Math.max(panX, minPanX), 0),
-    y: Math.min(Math.max(panY, minPanY), 0),
-  }
+  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
 }
 
 const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
@@ -293,12 +276,13 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
   coordinate.x = x
   coordinate.y = y
 
-  if (action.button === 0 && action.ctrlKey) {
+  if ((action.button === 0 && action.ctrlKey) || action.button === 1) {
     controller.value = {
       ...noController,
       isPanning: true,
     }
-    panState.value.lastPosition = { x: action.clientX, y: action.clientY }
+    const { e, f } = editorCanvas.value.getContext('2d').getTransform()
+    panState.onStart({ x: e, y: f }, { x: action.clientX, y: action.clientY })
   } else if (rectangle.contains(coordinate)) {
     rectangle.storeUserClick(coordinate)
 
@@ -325,6 +309,10 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
 }
 
 const mouseWheelOnCanvas = (action: WheelEvent) => {
+  if (controller.value.isPanning) {
+    return
+  }
+
   action.preventDefault() // prevent the default scrolling behavior
 
   const { x, y } = getMousePositionOnCanvas(action)
@@ -372,6 +360,33 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
     drawOnCanvas(coordinate.x, coordinate.y, x, y)
   }
 }
+
+const keyUpOnCanvas = (keyCode) => {
+  switch (keyCode) {
+    case 'KeyF':
+      const canvas = editorCanvas.value
+      const ctx = canvas.getContext('2d')
+      if (rectangle.isDefined()) {
+        const xform = ctx.getTransform()
+        ctx.setTransform(rectangle.getBoundingTransform(xform))
+      } else {
+        ctx.setTransform(new DOMMatrix())
+      }
+      canvasBackground()
+      paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
+      break
+  }
+}
+
+const keyOnCanvas = (e: MouseEvent) => {
+  switch (e.type) {
+    case 'keyup':
+      keyUpOnCanvas(e.code)
+      break
+  }
+}
+
+document.addEventListener('keyup', keyOnCanvas)
 
 onMounted(() => {
   const canvasWidth = 600
