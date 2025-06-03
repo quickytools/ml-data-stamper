@@ -268,14 +268,11 @@ const paintIt = (x: number, y: number, width: number, height: number) => {
 function getMousePositionOnCanvas(action: MouseEvent) {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
-  const canvasSpace = canvas.getBoundingClientRect()
 
-  // Get the current transform matrix
+  const x = action.offsetX
+  const y = action.offsetY
+
   const transform = ctx.getTransform()
-
-  const x = (action.clientX - canvasSpace.left) * (canvas.width / canvasSpace.width) // canvasSpace.width is the width of the canvas in pixels and canvas.
-  const y = (action.clientY - canvasSpace.top) * (canvas.height / canvasSpace.height)
-
   const transformedPoint = new DOMPoint(x, y).matrixTransform(transform.inverse())
 
   return {
@@ -380,7 +377,7 @@ onMounted(() => {
 </script>
 
 <template lang="pug">
-div.column
+div
     p Bounding box editor
     canvas(
         ref="editorCanvas"

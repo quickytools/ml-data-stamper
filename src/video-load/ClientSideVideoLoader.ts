@@ -1,4 +1,4 @@
-import type { VideoFile, VideoLoader } from './VideoLoader'
+import type { VideoLoader } from './VideoLoader'
 import { getFileSignature } from '@/util/fileUtil'
 
 import getVideoFrames from 'https://deno.land/x/get_video_frames@v0.0.10/mod.js'
@@ -130,8 +130,6 @@ export class ClientSideVideoLoader extends EventTarget implements VideoLoader {
           ? ctx.getImageData(0, 0, height, width)
           : ctx.getImageData(0, 0, width, height)
 
-        const buffer = new Uint8Array(frame.allocationSize())
-        const layout = await frame.copyTo(buffer)
         const { duration, timestamp } = frame
         videoData.frames.push({ content: imageData, timestamp, duration })
         frame.close()
