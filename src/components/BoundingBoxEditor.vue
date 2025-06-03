@@ -113,19 +113,10 @@ const canvasBackground = () => {
   })
 }
 
-const zoom = (coordinate: { x: number; y: number }, deltaY: number) => {
+const zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
 
-  /*
-   * a b e
-   * c d f
-   *
-   * xform.a = xform.d = zoom
-   * xform.b = xform.c = 0
-   * xform.e = x pan
-   * xform.f = y pan
-   */
   const xform = ctx.getTransform()
 
   const prevScale = xform.a
@@ -135,7 +126,7 @@ const zoom = (coordinate: { x: number; y: number }, deltaY: number) => {
 
   const scaleChange = newScale / prevScale
 
-  const { x, y } = xform.transformPoint(new DOMPoint(coordinate.x, coordinate.y))
+  const { x, y } = mouseCoordinate
   const updatedXform = new DOMMatrix()
     .translate(x, y)
     .scale(scaleChange)
@@ -335,10 +326,12 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
 
 const mouseWheelOnCanvas = (action: WheelEvent) => {
   action.preventDefault() // prevent the default scrolling behavior
+
   const { x, y } = getMousePositionOnCanvas(action)
   coordinate.x = x
   coordinate.y = y
-  zoom(coordinate, action.deltaY)
+
+  zoom({ x: action.offsetX, y: action.offsetY }, action.deltaY)
 }
 
 const mouseUpOnCanvas = () => {
