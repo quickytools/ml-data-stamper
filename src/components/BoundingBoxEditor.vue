@@ -74,29 +74,43 @@ const rectangle = {
   },
 }
 
-function drawCheckerboard(canvas, lightColor: string, darkColor: string) {
+function drawCheckerboard(canvas, { startX, startY, width, height, lightColor, darkColor }) {
   const ctx = canvas.getContext('2d')
-  const canvasWidth = canvas.width
-  const canvasHeight = canvas.height
-  // checkerboard pattern utilizes Odd and Even rows and columns to create a pattern
-  for (let i = 0; i <= canvasHeight / 10; i++) {
-    for (let j = 0; j <= canvasWidth / 10; j++) {
-      if ((j + i) % 2 === 0) {
-        ctx.fillStyle = lightColor
-        ctx.fillRect(j * 10, i * 10, 10, 10)
-      } else {
-        ctx.fillStyle = darkColor
-        ctx.fillRect(j * 10, i * 10, 10, 10)
-      }
+  const x0 = Math.round(startX * 0.1) * 10
+  const y0 = Math.round(startY * 0.1) * 10
+  for (let i = 0; i <= height / 10; i++) {
+    for (let j = 0; j <= width / 10; j++) {
+      const x = x0 + j * 10
+      const y = y0 + i * 10
+      ctx.fillStyle = ((x + y) * 0.1) % 2 ? lightColor : darkColor
+      ctx.fillRect(x, y, 10, 10)
     }
   }
 }
 
 const canvasBackground = () => {
   const canvas = editorCanvas.value
-  const lightColor = 'rgba(255, 255, 255, 0.80)'
-  const darkColor = 'rgba(0, 0, 0, 0.05)'
-  drawCheckerboard(canvas, lightColor, darkColor)
+  const ctx = canvas.getContext('2d')
+  const { a, e, f } = ctx.getTransform()
+
+  const inverseScale = a > 0 ? 1 / a : 1
+  const canvasWidth = canvas.width
+  const canvasHeight = canvas.height
+  const scaledHeight = canvasHeight * inverseScale
+  const scaledWidth = canvasWidth * inverseScale
+  const startX = -e * inverseScale
+  const startY = -f * inverseScale
+
+  ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
+
+  drawCheckerboard(canvas, {
+    startX,
+    startY,
+    width: scaledWidth,
+    height: scaledHeight,
+    lightColor: 'rgba(255, 255, 255, 0.80)',
+    darkColor: 'rgba(0, 0, 0, 0.05)',
+  })
 }
 
 const zoom = (coordinate: { x: number; y: number }, deltaY: number) => {
@@ -135,7 +149,6 @@ const zoom = (coordinate: { x: number; y: number }, deltaY: number) => {
 
   ctx.setTransform(updatedXform)
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
   canvasBackground() // redraws the background
   paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height) // redraw the rectangle
 }
@@ -190,7 +203,6 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
   canvasBackground() // redraws the background
   cursor.value.crosshair = true // this is used to show the crosshair cursor when the user is drawing
 
@@ -213,7 +225,6 @@ const movingRectangle = (x: number, y: number) => {
   const Canvas = editorCanvas.value
   const ctx = Canvas.getContext('2d')
 
-  ctx.clearRect(0, 0, Canvas.width, Canvas.height)
   canvasBackground() //redraws the background
 
   // updating the rectangle object with the new coordinates and size with the mouse click
@@ -227,7 +238,6 @@ const resizingRectangle = (x: number, y: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
   canvasBackground()
 
   // Handle each side resizing
