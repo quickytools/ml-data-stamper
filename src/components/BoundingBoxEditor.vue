@@ -102,33 +102,38 @@ const canvasBackground = () => {
 const zoom = (coordinate: { x: number; y: number }, deltaY: number) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
-  const prevScale = scale.value
+
+  /*
+   * a b e
+   * c d f
+   *
+   * xform.a = xform.d = zoom
+   * xform.b = xform.c = 0
+   * xform.e = x pan
+   * xform.f = y pan
+   */
+  const xform = ctx.getTransform()
+
+  const prevScale = xform.a
 
   let newScale = prevScale + deltaY * -0.01 // Adjust the zoom speed as needed
-
-  const minimumScale = Math.max(
-    editorCanvasWidth.value / canvas.width,
-    editorCanvasHeight.value / canvas.height,
-  )
-
-  newScale = Math.min(Math.max(minimumScale, newScale), 5) // range between 0.1 and 5 doesn't go below the minimum scale or above the maximum scale
+  newScale = Math.min(Math.max(0.5, newScale), 10)
 
   const scaleChange = newScale / prevScale
 
-  const newPanOffSetX = coordinate.x - (coordinate.x - panState.value.offSet.x) * scaleChange // where the mouse is when zooming in and out
-  const newPanOffSetY = coordinate.y - (coordinate.y - panState.value.offSet.y) * scaleChange
+  const { x, y } = xform.transformPoint(new DOMPoint(coordinate.x, coordinate.y))
+  const updatedXform = new DOMMatrix()
+    .translate(x, y)
+    .scale(scaleChange)
+    .translate(-x, -y)
+    .multiply(xform)
 
-  const limitOffSet = canvasBoundary(newPanOffSetX, newPanOffSetY, newScale)
-  panState.value.offSet = limitOffSet // limit the pan offset to the canvas boundary
+  const limitOffSet = canvasBoundary(updatedXform.e, updatedXform.f, newScale)
+
+  panState.value.offSet = limitOffSet
   scale.value = newScale
-  ctx.setTransform(
-    newScale,
-    0,
-    0,
-    newScale,
-    limitOffSet.x, // adjust the viewport to zoom in and out where the mouse is
-    limitOffSet.y,
-  )
+
+  ctx.setTransform(updatedXform)
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   canvasBackground() // redraws the background
