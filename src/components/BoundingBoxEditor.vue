@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
+import { SelectionArea } from '../box-editor/SelectionArea'
+import { useVideoStore } from '../stores/videoStore'
 
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
-const scale = ref(1) // this is the scale factor for the canvas, used for zooming in and out
-const controller = ref({
+const editorScale = ref(1) // this is the scale factor for the canvas, used for zooming in and out
+const videoStore = useVideoStore() // stored videoFrames
+const canvasInteractionState = ref({
   isDrawing: false,
   isDraggable: false,
   isResizing: false,
   isPanning: false,
 }) // this is the controller object that will be used to control the annotation box
-const cursor = ref({
+const interactionCursor = ref({
   sizingDirection: { left: false, right: false, top: false, bottom: false },
   hovering: false,
   crosshair: false,
@@ -33,67 +36,8 @@ const panState = {
     }
   },
 }
-
-const coordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
-const rectangle = {
-  // annotation box
-  x: 0,
-  y: 0,
-  width: 0,
-  height: 0,
-  outterLayer: 15,
-  whereUserClicked: { x: 0, y: 0 },
-  isDefined: function () {
-    return this.width > 0 && this.height > 0
-  },
-  getBoundingTransform: function (viewXform) {
-    // TODO Center on view bounds
-    const { a } = viewXform
-    const inverseScale = a > 0 ? 1 / a : 1
-    return new DOMMatrix([a, 0, 0, a, -this.x * a, -this.y * a])
-  },
-  storeUserClick: function (coordinate: { x: number; y: number }) {
-    this.whereUserClicked.x = coordinate.x - this.x
-    this.whereUserClicked.y = coordinate.y - this.y
-  },
-  contains: function (coordinate: { x: number; y: number }) {
-    return (
-      coordinate.x >= this.x &&
-      coordinate.x <= this.x + this.width &&
-      coordinate.y >= this.y &&
-      coordinate.y <= this.y + this.height
-    )
-  },
-  outterZoneDetection: function (coordinate: { x: number; y: number }) {
-    return (
-      coordinate.x >= this.x - this.outterLayer &&
-      coordinate.x <= this.x + this.width + this.outterLayer &&
-      coordinate.y >= this.y - this.outterLayer &&
-      coordinate.y <= this.y + this.height + this.outterLayer
-    )
-  },
-  move: function (x: number, y: number) {
-    this.x = x - this.whereUserClicked.x
-    this.y = y - this.whereUserClicked.y
-  },
-  checkLeftZone: function (coordinate: { x: number }) {
-    return coordinate.x >= this.x - this.outterLayer && coordinate.x <= this.x
-  },
-  checkRightZone: function (coordinate: { x: number }) {
-    return (
-      coordinate.x >= this.x + this.width && coordinate.x <= this.x + this.width + this.outterLayer
-    )
-  },
-  checkTopZone: function (coordinate: { y: number }) {
-    return coordinate.y <= this.y && coordinate.y >= this.y - this.outterLayer
-  },
-  checkBottomZone: function (coordinate: { y: number }) {
-    return (
-      coordinate.y >= this.y + this.height &&
-      coordinate.y <= this.y + this.height + this.outterLayer
-    )
-  },
-}
+const mouseCanvasCoordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
+const selectionArea = new SelectionArea() //annotation box
 
 function drawCheckerboard(canvas, { startX, startY, width, height, lightColor, darkColor }) {
   const ctx = canvas.getContext('2d')
@@ -154,12 +98,12 @@ const zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
     .translate(-x, -y)
     .multiply(xform)
 
-  scale.value = newScale
+  editorScale.value = newScale
 
   ctx.setTransform(updatedXform)
 
   canvasBackground() // redraws the background
-  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height) // redraw the rectangle
+  paintIt(selectionArea) // redraw the rectangle
 }
 
 const moveCanvasView = (action: MouseEvent) => {
@@ -170,7 +114,7 @@ const moveCanvasView = (action: MouseEvent) => {
   ctx.setTransform(a, 0, 0, a, x, y)
 
   canvasBackground()
-  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
+  paintIt(selectionArea)
 }
 
 const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
@@ -178,7 +122,7 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
   const ctx = canvas.getContext('2d')
 
   canvasBackground() // redraws the background
-  cursor.value.crosshair = true // this is used to show the crosshair cursor when the user is drawing
+  interactionCursor.value.crosshair = true // this is used to show the crosshair cursor when the user is drawing
 
   const startX = Math.min(x1, x2)
   const startY = Math.min(y1, y2)
@@ -186,12 +130,12 @@ const drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
   const height = Math.abs(y2 - y1)
 
   // storing the rectangle coordinates and size in the rectangle object
-  rectangle.x = startX
-  rectangle.y = startY
-  rectangle.width = width
-  rectangle.height = height
+  selectionArea.x = startX
+  selectionArea.y = startY
+  selectionArea.width = width
+  selectionArea.height = height
 
-  paintIt(startX, startY, width, height) // this function is used to draw the rectangle on the canvas
+  paintIt(selectionArea) // this function is used to draw the rectangle on the canvas
 }
 
 // model function to move the rectangle
@@ -202,9 +146,9 @@ const movingRectangle = (x: number, y: number) => {
   canvasBackground() //redraws the background
 
   // updating the rectangle object with the new coordinates and size with the mouse click
-  rectangle.move(x, y)
+  selectionArea.move(x, y)
 
-  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
+  paintIt(selectionArea)
 }
 
 // model function to resize the rectangle
@@ -215,43 +159,43 @@ const resizingRectangle = (x: number, y: number) => {
   canvasBackground()
 
   // Handle each side resizing
-  if (cursor.value.sizingDirection.left) {
-    const newWidth = rectangle.x + rectangle.width - x
-    if (newWidth >= rectangle.outterLayer) {
-      rectangle.x = x
-      rectangle.width = newWidth
+  if (interactionCursor.value.sizingDirection.left) {
+    const newWidth = selectionArea.x + selectionArea.width - x
+    if (newWidth >= selectionArea.outerLayer) {
+      selectionArea.x = x
+      selectionArea.width = newWidth
     }
   }
-  if (cursor.value.sizingDirection.right) {
-    const newWidth = x - rectangle.x
-    if (newWidth >= rectangle.outterLayer) {
-      rectangle.width = newWidth
+  if (interactionCursor.value.sizingDirection.right) {
+    const newWidth = x - selectionArea.x
+    if (newWidth >= selectionArea.outerLayer) {
+      selectionArea.width = newWidth
     }
   }
-  if (cursor.value.sizingDirection.top) {
-    const newHeight = rectangle.y + rectangle.height - y
-    if (newHeight >= rectangle.outterLayer) {
-      rectangle.y = y
-      rectangle.height = newHeight
+  if (interactionCursor.value.sizingDirection.top) {
+    const newHeight = selectionArea.y + selectionArea.height - y
+    if (newHeight >= selectionArea.outerLayer) {
+      selectionArea.y = y
+      selectionArea.height = newHeight
     }
   }
-  if (cursor.value.sizingDirection.bottom) {
-    const newHeight = y - rectangle.y
-    if (newHeight >= rectangle.outterLayer) {
-      rectangle.height = newHeight
+  if (interactionCursor.value.sizingDirection.bottom) {
+    const newHeight = y - selectionArea.y
+    if (newHeight >= selectionArea.outerLayer) {
+      selectionArea.height = newHeight
     }
   }
 
-  paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
+  paintIt(selectionArea)
 }
 
 // view function for user to see the rectangle
-const paintIt = (x: number, y: number, width: number, height: number) => {
+const paintIt = (area: { x: number; y: number; width: number; height: number }) => {
   const canvas = editorCanvas.value
   const ctx = canvas.getContext('2d')
   ctx.beginPath()
   ctx.fillStyle = 'rgba(255, 0, 0, 0.05)'
-  ctx.fillRect(x, y, width, height)
+  ctx.fillRect(area.x, area.y, area.width, area.height)
 }
 
 function getMousePositionOnCanvas(action: MouseEvent) {
@@ -271,37 +215,40 @@ function getMousePositionOnCanvas(action: MouseEvent) {
 }
 
 const mouseDownOnCanvas = (action: MouseEvent) => {
-  const noController = controller.value
+  const noController = canvasInteractionState.value
   const { x, y } = getMousePositionOnCanvas(action)
-  coordinate.x = x
-  coordinate.y = y
+  mouseCanvasCoordinate.x = x
+  mouseCanvasCoordinate.y = y
 
   if ((action.button === 0 && action.ctrlKey) || action.button === 1) {
-    controller.value = {
+    canvasInteractionState.value = {
       ...noController,
       isPanning: true,
     }
     const { e, f } = editorCanvas.value.getContext('2d').getTransform()
     panState.onStart({ x: e, y: f }, { x: action.clientX, y: action.clientY })
-  } else if (rectangle.contains(coordinate)) {
-    rectangle.storeUserClick(coordinate)
+  } else if (selectionArea.contains(mouseCanvasCoordinate)) {
+    selectionArea.storeUserClick(mouseCanvasCoordinate)
 
-    controller.value = {
+    canvasInteractionState.value = {
       ...noController,
       isDraggable: true,
     }
-  } else if (rectangle.outterZoneDetection(coordinate)) {
-    cursor.value.sizingDirection.left = rectangle.checkLeftZone(coordinate)
-    cursor.value.sizingDirection.right = rectangle.checkRightZone(coordinate)
-    cursor.value.sizingDirection.top = rectangle.checkTopZone(coordinate)
-    cursor.value.sizingDirection.bottom = rectangle.checkBottomZone(coordinate)
+  } else if (selectionArea.outerZoneDetection(mouseCanvasCoordinate)) {
+    interactionCursor.value.sizingDirection.left =
+      selectionArea.checkLeftZone(mouseCanvasCoordinate)
+    interactionCursor.value.sizingDirection.right =
+      selectionArea.checkRightZone(mouseCanvasCoordinate)
+    interactionCursor.value.sizingDirection.top = selectionArea.checkTopZone(mouseCanvasCoordinate)
+    interactionCursor.value.sizingDirection.bottom =
+      selectionArea.checkBottomZone(mouseCanvasCoordinate)
 
-    controller.value = {
+    canvasInteractionState.value = {
       ...noController,
       isResizing: true,
     }
   } else {
-    controller.value = {
+    canvasInteractionState.value = {
       ...noController,
       isDrawing: true,
     }
@@ -309,27 +256,27 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
 }
 
 const mouseWheelOnCanvas = (action: WheelEvent) => {
-  if (controller.value.isPanning) {
+  if (canvasInteractionState.value.isPanning) {
     return
   }
 
   action.preventDefault() // prevent the default scrolling behavior
 
   const { x, y } = getMousePositionOnCanvas(action)
-  coordinate.x = x
-  coordinate.y = y
+  mouseCanvasCoordinate.x = x
+  mouseCanvasCoordinate.y = y
 
   zoom({ x: action.offsetX, y: action.offsetY }, action.deltaY)
 }
 
 const mouseUpOnCanvas = () => {
-  controller.value = {
+  canvasInteractionState.value = {
     isDrawing: false,
     isDraggable: false,
     isResizing: false,
     isPanning: false,
   }
-  cursor.value.sizingDirection = {
+  interactionCursor.value.sizingDirection = {
     left: false,
     right: false,
     top: false,
@@ -342,22 +289,22 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   const temp = { x: x, y: y }
 
   if (
-    !controller.value.isDraggable &&
-    !controller.value.isResizing &&
-    !controller.value.isDrawing
+    !canvasInteractionState.value.isDraggable &&
+    !canvasInteractionState.value.isResizing &&
+    !canvasInteractionState.value.isDrawing
   ) {
     // check if the user is not dragging or resizing the rectangle
-    cursor.value.hovering = rectangle.contains(temp)
+    interactionCursor.value.hovering = selectionArea.contains(temp)
   }
 
-  if (controller.value.isPanning) {
+  if (canvasInteractionState.value.isPanning) {
     moveCanvasView(action)
-  } else if (controller.value.isDraggable) {
+  } else if (canvasInteractionState.value.isDraggable) {
     movingRectangle(x, y)
-  } else if (controller.value.isResizing) {
+  } else if (canvasInteractionState.value.isResizing) {
     resizingRectangle(x, y)
-  } else if (controller.value.isDrawing) {
-    drawOnCanvas(coordinate.x, coordinate.y, x, y)
+  } else if (canvasInteractionState.value.isDrawing) {
+    drawOnCanvas(mouseCanvasCoordinate.x, mouseCanvasCoordinate.y, x, y)
   }
 }
 
@@ -366,14 +313,14 @@ const keyUpOnCanvas = (keyCode) => {
     case 'KeyF':
       const canvas = editorCanvas.value
       const ctx = canvas.getContext('2d')
-      if (rectangle.isDefined()) {
+      if (selectionArea.isDefined()) {
         const xform = ctx.getTransform()
-        ctx.setTransform(rectangle.getBoundingTransform(xform))
+        ctx.setTransform(selectionArea.getBoundingTransform(xform))
       } else {
         ctx.setTransform(new DOMMatrix())
       }
       canvasBackground()
-      paintIt(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
+      paintIt(selectionArea.x, selectionArea.y, selectionArea.width, selectionArea.height)
       break
   }
 }
@@ -387,6 +334,8 @@ const keyOnCanvas = (e: MouseEvent) => {
 }
 
 document.addEventListener('keyup', keyOnCanvas)
+
+watch()
 
 onMounted(() => {
   const canvasWidth = 600
@@ -406,7 +355,7 @@ div
         ref="editorCanvas"
         :width='editorCanvasWidth'
         :height='editorCanvasHeight'
-        :class="{canvas: cursor.crosshair, hover: cursor.hovering, dragging: controller.isDraggable,'resize-left': cursor.sizingDirection.left, 'resize-right': cursor.sizingDirection.right, 'resize-top': cursor.sizingDirection.top, 'resize-bottom': cursor.sizingDirection.bottom, 'top-left-corner': cursor.sizingDirection.left && cursor.sizingDirection.top, 'top-right-corner': cursor.sizingDirection.right && cursor.sizingDirection.top, 'bottom-left-corner': cursor.sizingDirection.left && cursor.sizingDirection.bottom, 'bottom-right-corner': cursor.sizingDirection.right && cursor.sizingDirection.bottom}"
+        :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: canvasInteractionState.isDraggable, 'resize-left': interactionCursor.sizingDirection.left, 'resize-right': interactionCursor.sizingDirection.right, 'resize-top': interactionCursor.sizingDirection.top, 'resize-bottom': interactionCursor.sizingDirection.bottom, 'top-left-corner': interactionCursor.sizingDirection.left && interactionCursor.sizingDirection.top, 'top-right-corner': interactionCursor.sizingDirection.right && interactionCursor.sizingDirection.top, 'bottom-left-corner': interactionCursor.sizingDirection.left && interactionCursor.sizingDirection.bottom, 'bottom-right-corner': interactionCursor.sizingDirection.right && interactionCursor.sizingDirection.bottom}"
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"

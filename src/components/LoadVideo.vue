@@ -5,6 +5,7 @@ import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
 
 import { ClientSideVideoLoader } from '../video-load/ClientSideVideoLoader'
+import { useVideoStore } from '../stores/videoStore'
 
 // TODO Refactor loading video data, rendering frame data
 import { pipeline, RawImage } from '@huggingface/transformers'
@@ -17,6 +18,7 @@ const videoCanvas = ref()
 const videoCanvasWidth = ref(0)
 const videoCanvasHeight = ref(0)
 const sliderFrameIndex = ref(0)
+const videoStore = useVideoStore()
 
 const videoSrc = ref('')
 
@@ -86,12 +88,17 @@ watch(seekVideoData, (value, prev) => {
     // TODO Find canvas resize or similar event
     setTimeout(() => {
       loadFrame(0, frames)
+      videoStore.setVideoFrame(0, frames[0].content)
     }, 100)
   }
 })
 
 watch(sliderFrameIndex, (index) => {
   loadFrame(index, videoFrames.value)
+  const frame = videoFrames.value[index]
+  if (frame) {
+    videoStore.setVideoFrame(index, frame.content)
+  }
 })
 
 const onFileChange = (e) => {
@@ -117,6 +124,7 @@ const onFileChange = (e) => {
       } catch (e) {
         console.error(e)
       }
+      videoStore.setVideoStore(videoData)
       videoDataSubject.next(videoData)
     })
   }
