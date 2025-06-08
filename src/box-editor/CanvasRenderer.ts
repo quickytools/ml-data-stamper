@@ -3,7 +3,7 @@ import { useVideoStore } from '../stores/videoStore'
 import { SelectionArea } from '../box-editor/SelectionArea'
 
 export class CanvasRenderer {
-  private getFrame: () => HTMLImageElement | null // from videoStore
+  private getFrame: () => ImageBitmap | null // from videoStore
   private editorCanvas = ref()
   private editorScale = ref()
   private interactionCursor = ref()
@@ -12,7 +12,7 @@ export class CanvasRenderer {
 
   constructor(
     editorCanvas: HTMLCanvasElement,
-    getFrame: () => HTMLImageElement | null,
+    getFrame: () => ImageBitmap | null,
     editorScale: number,
     panState,
     selectionArea: SelectionArea,
@@ -56,8 +56,16 @@ export class CanvasRenderer {
     ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
 
     const frame = this.getFrame()
-    if (frame) {
-      ctx.drawImage(frame, scaledWidth, scaledHeight) // arg 1. for elements like video, canvas, and images, 2nd & 3rd args are x and y coordinates
+    if (frame != null) {
+      this.drawCheckerboard(canvas, {
+        startX,
+        startY,
+        width: scaledWidth,
+        height: scaledHeight,
+        lightColor: 'rgba(255, 255, 255, 0.80)',
+        darkColor: 'rgba(0, 0, 0, 0.05)',
+      })
+      ctx.drawImage(frame, 0, 0) // arg 1. for elements like video, canvas, and images, 2nd & 3rd args are x and y coordinates
     } else {
       this.drawCheckerboard(canvas, {
         startX,
@@ -79,7 +87,7 @@ export class CanvasRenderer {
     const prevScale = xform.a
 
     let newScale = prevScale + deltaY * -0.01 // Adjust the zoom speed as needed
-    newScale = Math.min(Math.max(0.5, newScale), 10)
+    newScale = Math.min(Math.max(0.3, newScale), 10)
 
     const scaleChange = newScale / prevScale
 

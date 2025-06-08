@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTemplateRef, ref, watch, inject, onMounted } from 'vue'
+import { useTemplateRef, ref, watch, inject, onMounted, toRaw } from 'vue'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
@@ -22,9 +22,16 @@ const videoStore = useVideoStore()
 
 const videoSrc = ref('')
 
+interface VideoFrame {
+content: ImageData
+timestamp: number
+duration: number
+}
+
+const videoFrames = ref<VideoFrame[]>([])
+
 const videoDataSubject = new Subject()
 
-const videoFrames = ref([])
 let canvasRotation = 0
 
 const isLoadingDetector = ref(false)
@@ -86,18 +93,33 @@ watch(seekVideoData, (value, prev) => {
     videoFrames.value = frames
     canvasRotation = (orientation * Math.PI) / 180
     // TODO Find canvas resize or similar event
-    setTimeout(() => {
+    setTimeout(async () => {
       loadFrame(0, frames)
-      videoStore.setVideoFrame(0, frames[0].content)
+      const bitMapConversion = await createImageBitmap(frames[0].content)// pull video frames in this location. This is where each fram gets displayed in the LoadVideo page
+      videoStore.setVideoFrame(0, bitMapConversion)
     }, 100)
   }
 })
 
-watch(sliderFrameIndex, (index) => {
+watch(sliderFrameIndex, async (index) => {
   loadFrame(index, videoFrames.value)
   const frame = videoFrames.value[index]
-  if (frame) {
-    videoStore.setVideoFrame(index, frame.content)
+
+  // Debug logs to inspect the frame and its content
+  const realImageData = toRaw(frame)
+  const rawContent = toRaw(frame.content)
+  console.log("Frame at index", index, "is", realImageData)
+  console.log("Frame.content is", rawContent)
+  console.log("Type of raw content is", typeof realImageData)
+  console.log("Type of frame.content is", typeof frame)
+  if (rawContent) {
+    try{
+    const bitMapConversion = await createImageBitmap(rawContent) // another location for frames to be out putted to LoadVideo, perhaps the first frame
+    videoStore.setVideoFrame(index, bitMapConversion)
+    }
+    catch(error){
+      console.error("failed to create imageBitMap from frame.content: ", error)
+    }
   }
 })
 

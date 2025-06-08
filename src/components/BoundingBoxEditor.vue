@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, watchEffect } from 'vue'
 import { SelectionArea } from '../box-editor/SelectionArea'
 import { useVideoStore } from '../stores/videoStore'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
@@ -9,6 +9,7 @@ const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
 const editorScale = ref(1) //  scale factor for the canvas, used for zooming in and out
 const videoStore = useVideoStore() // stored videoFrames use videoStore.currentFrame
+const isCanvasReady = ref(false)
 const canvasInteractionState = ref({
   isDrawing: false,
   isDraggable: false,
@@ -40,6 +41,11 @@ const panState = {
 const mouseCanvasCoordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
 const selectionArea = new SelectionArea() // annotation box
 let canvasRenderer: CanvasRenderer
+watchEffect(() => {
+    if(isCanvasReady.value &&videoStore.currentFrame){
+      canvasRenderer.canvasBackground()
+    }
+  })
 const mouseDownOnCanvas = (action: MouseEvent) => {
   const noController = canvasInteractionState.value
   const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
@@ -166,16 +172,21 @@ onMounted(() => {
   editorCanvasWidth.value = canvasWidth
   editorCanvasHeight.value = canvasHeight
 
-  canvasRenderer = new CanvasRenderer( // canvas space
-    editorCanvas.value,
-    () => videoStore.currentFrame,
-    editorScale.value,
-    panState,
-    selectionArea,
-    interactionCursor.value,
-  )
-  // Wait for next animation frame before drawing on canvas or draw calls are dropped
-  window.requestAnimationFrame(canvasRenderer.canvasBackground)
+    nextTick(()=>{
+      if(editorCanvas.value){
+      canvasRenderer = new CanvasRenderer( // canvas space
+      editorCanvas.value,
+      () => videoStore.currentFrame,
+      editorScale.value,
+      panState,
+      selectionArea,
+      interactionCursor.value,
+    )
+    isCanvasReady.value = true
+    // Wait for next animation frame before drawing on canvas or draw calls are dropped
+    window.requestAnimationFrame(canvasRenderer.canvasBackground)
+   }
+  })
 })
 </script>
 
