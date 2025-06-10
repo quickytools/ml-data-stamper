@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watchEffect } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import { SelectionArea } from '../box-editor/SelectionArea'
-import { useVideoStore } from '../stores/videoStore'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
+import LoadVideo from './LoadVideo.vue'
+
 
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
 const editorScale = ref(1) //  scale factor for the canvas, used for zooming in and out
-const videoStore = useVideoStore() // stored videoFrames use videoStore.currentFrame
 const isCanvasReady = ref(false)
+const currentFrame = ref(null)
 const canvasInteractionState = ref({
   isDrawing: false,
   isDraggable: false,
@@ -38,14 +39,19 @@ const panState = {
     }
   },
 }
+
 const mouseCanvasCoordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
 const selectionArea = new SelectionArea() // annotation box
 let canvasRenderer: CanvasRenderer
-watchEffect(() => {
-    if(isCanvasReady.value &&videoStore.currentFrame){
+
+  watch(currentFrame,(currentFrame) => {// watches for frame changes
+    if(isCanvasReady.value && currentFrame != null){
+      console.log('frame', currentFrame)
+      canvasRenderer.setVideoFrame(currentFrame)
       canvasRenderer.canvasBackground()
     }
   })
+
 const mouseDownOnCanvas = (action: MouseEvent) => {
   const noController = canvasInteractionState.value
   const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
@@ -67,6 +73,8 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
       isDraggable: true,
     }
   } else if (selectionArea.outerZoneDetection(mouseCanvasCoordinate)) {
+    // a series of boolean checks if users cursor is in the outer layer of the annotation box
+    //used for resizing
     interactionCursor.value.sizingDirection.left =
       selectionArea.checkLeftZone(mouseCanvasCoordinate)
     interactionCursor.value.sizingDirection.right =
@@ -166,6 +174,8 @@ const keyOnCanvas = (e: MouseEvent) => {
 
 document.addEventListener('keyup', keyOnCanvas)
 
+
+
 onMounted(() => {
   const canvasWidth = 600
   const canvasHeight = 400
@@ -174,25 +184,30 @@ onMounted(() => {
 
     nextTick(()=>{
       if(editorCanvas.value){
-      canvasRenderer = new CanvasRenderer( // canvas space
+      canvasRenderer = new CanvasRenderer(
       editorCanvas.value,
-      () => videoStore.currentFrame,
+      currentFrame.value,
       editorScale.value,
       panState,
       selectionArea,
       interactionCursor.value,
     )
     isCanvasReady.value = true
-    // Wait for next animation frame before drawing on canvas or draw calls are dropped
     window.requestAnimationFrame(canvasRenderer.canvasBackground)
    }
   })
 })
+
+const onFrameChange = (e) => {
+  currentFrame.value = e.content
+  console.log('frame changed', e)
+}
 </script>
 
 <template lang="pug">
 div
     p Bounding box editor
+    LoadVideo(:isEventEmitter="true" @frameChange='onFrameChange')
     canvas(
         ref="editorCanvas"
         :width='editorCanvasWidth'
@@ -203,7 +218,7 @@ div
         @mouseup="mouseUpOnCanvas"
         @wheel="mouseWheelOnCanvas"
     )
-    p Use mouse wheel to zoom. Use Ctrl + left mouse click to move around the canvas after zooming.
+    p Use mouse wheel to zoom. Use Ctrl + left mouse click to move around the canvas after zooming or middle mouse click.
 </template>
 
 <style scoped>

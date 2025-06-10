@@ -1,15 +1,28 @@
 <script setup lang="ts">
-import { useTemplateRef, ref, watch, inject, onMounted, toRaw } from 'vue'
+import { useTemplateRef, ref, watch, inject, onMounted, defineProps, defineEmits } from 'vue'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
 
 import { ClientSideVideoLoader } from '../video-load/ClientSideVideoLoader'
-import { useVideoStore } from '../stores/videoStore'
 
 // TODO Refactor loading video data, rendering frame data
 import { pipeline, RawImage } from '@huggingface/transformers'
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
+
+const props = defineProps({
+  isEventEmitter: {
+    type: Boolean,
+    default: false,
+  }, // true emits video data as event false renders frame in component camvas
+})
+
+const emit = defineEmits<{
+  /**
+   * On video data load and frame change the frame content, frame width, and frame height is emitted.
+   */
+  frameChange: [content: any, width: number, height: number],
+  }>()
 
 const sourceVideoRepository = inject('source-video-repository')
 
@@ -18,17 +31,11 @@ const videoCanvas = ref()
 const videoCanvasWidth = ref(0)
 const videoCanvasHeight = ref(0)
 const sliderFrameIndex = ref(0)
-const videoStore = useVideoStore()
+
 
 const videoSrc = ref('')
 
-interface VideoFrame {
-content: ImageData
-timestamp: number
-duration: number
-}
-
-const videoFrames = ref<VideoFrame[]>([])
+const videoFrames = ref([])
 
 const videoDataSubject = new Subject()
 
@@ -74,18 +81,28 @@ const seekVideoData = useObservable(
 
 const loadFrame = (index, frames) => {
   if (frames && index >= 0 && index < frames.length) {
-    const ctx = videoCanvas.value.getContext('2d')
     const frame = frames[index]
+    if(props.isEventEmitter){
+      emit('frameChange', {
+        content: frame.content,
+        width: videoCanvasWidth.value,
+        height: videoCanvasHeight.value
+      })
+    }else{
+    const ctx = videoCanvas.value.getContext('2d')
     ctx.putImageData(frame.content, 0, 0)
+    }
   }
 }
 
 watch(seekVideoData, (value, prev) => {
   const { width, height, frames, orientation } = value
 
-  const canvas = videoCanvas.value
-  const ctx = canvas.getContext('2d')
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  if(!props.isEventEmitter){
+    const canvas = videoCanvas.value
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
 
   if (frames?.length > 0) {
     videoCanvasWidth.value = width
@@ -95,32 +112,12 @@ watch(seekVideoData, (value, prev) => {
     // TODO Find canvas resize or similar event
     setTimeout(async () => {
       loadFrame(0, frames)
-      const bitMapConversion = await createImageBitmap(frames[0].content)// pull video frames in this location. This is where each fram gets displayed in the LoadVideo page
-      videoStore.setVideoFrame(0, bitMapConversion)
     }, 100)
   }
 })
 
 watch(sliderFrameIndex, async (index) => {
   loadFrame(index, videoFrames.value)
-  const frame = videoFrames.value[index]
-
-  // Debug logs to inspect the frame and its content
-  const realImageData = toRaw(frame)
-  const rawContent = toRaw(frame.content)
-  console.log("Frame at index", index, "is", realImageData)
-  console.log("Frame.content is", rawContent)
-  console.log("Type of raw content is", typeof realImageData)
-  console.log("Type of frame.content is", typeof frame)
-  if (rawContent) {
-    try{
-    const bitMapConversion = await createImageBitmap(rawContent) // another location for frames to be out putted to LoadVideo, perhaps the first frame
-    videoStore.setVideoFrame(index, bitMapConversion)
-    }
-    catch(error){
-      console.error("failed to create imageBitMap from frame.content: ", error)
-    }
-  }
 })
 
 const onFileChange = (e) => {
@@ -146,7 +143,6 @@ const onFileChange = (e) => {
       } catch (e) {
         console.error(e)
       }
-      videoStore.setVideoStore(videoData)
       videoDataSubject.next(videoData)
     })
   }
@@ -177,12 +173,18 @@ div.column
         switch-label-side
         v-if="videoFrames.length>0"
       )
-  canvas(ref="videoCanvas" :width='videoCanvasWidth' :height='videoCanvasHeight')
+  canvas(ref="videoCanvas"
+  v-if="!props.isEventEmitter"
+  :width='videoCanvasWidth'
+  :height='videoCanvasHeight'
+
+  )
 </template>
 
 <style scoped>
 /* TODO Better styling */
 .frame-seeker {
+  min-width: 200px;
   max-width: 600px;
 }
 </style>

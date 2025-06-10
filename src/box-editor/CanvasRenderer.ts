@@ -1,25 +1,25 @@
-import { ref } from 'vue'
-import { useVideoStore } from '../stores/videoStore'
+import { ref, toRaw } from 'vue'
 import { SelectionArea } from '../box-editor/SelectionArea'
 
 export class CanvasRenderer {
-  private getFrame: () => ImageBitmap | null // from videoStore
+  private currentFrame = ref()
   private editorCanvas = ref()
   private editorScale = ref()
   private interactionCursor = ref()
+
   private panState
   private selectionArea = new SelectionArea()
 
   constructor(
     editorCanvas: HTMLCanvasElement,
-    getFrame: () => ImageBitmap | null,
+    currentFrame: null,
     editorScale: number,
     panState,
     selectionArea: SelectionArea,
     interactionCursor: object,
   ) {
     this.editorCanvas.value = editorCanvas
-    this.getFrame = getFrame
+    this.currentFrame.value = currentFrame
     this.editorScale.value = editorScale
     this.panState = panState
     this.selectionArea = selectionArea
@@ -55,9 +55,7 @@ export class CanvasRenderer {
 
     ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
 
-    const frame = this.getFrame()
-    if (frame != null) {
-      this.drawCheckerboard(canvas, {
+    this.drawCheckerboard(canvas, {
         startX,
         startY,
         width: scaledWidth,
@@ -65,16 +63,17 @@ export class CanvasRenderer {
         lightColor: 'rgba(255, 255, 255, 0.80)',
         darkColor: 'rgba(0, 0, 0, 0.05)',
       })
-      ctx.drawImage(frame, 0, 0) // arg 1. for elements like video, canvas, and images, 2nd & 3rd args are x and y coordinates
-    } else {
-      this.drawCheckerboard(canvas, {
-        startX,
-        startY,
-        width: scaledWidth,
-        height: scaledHeight,
-        lightColor: 'rgba(255, 255, 255, 0.80)',
-        darkColor: 'rgba(0, 0, 0, 0.05)',
-      })
+    if (this.currentFrame.value != null) {
+      ctx.drawImage(this.currentFrame.value, 0, 0)
+    }
+  }
+
+  setVideoFrame = async (videoFrame: any) =>{
+    const rawContent = toRaw(videoFrame)
+    try{
+      this.currentFrame.value = await createImageBitmap(rawContent)
+    }catch(e){
+      console.error("failed to create imageBitMap from frame.content: ", e)
     }
   }
 
