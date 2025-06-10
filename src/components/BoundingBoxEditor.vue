@@ -44,10 +44,10 @@ const mouseCanvasCoordinate = { x: 0, y: 0 } // this is the coordinate object th
 const selectionArea = new SelectionArea() // annotation box
 let canvasRenderer: CanvasRenderer
 
-  watch(currentFrame,(currentFrame) => {// watches for frame changes
+  watch(currentFrame, async(currentFrame) => {// watches for frame changes
     if(isCanvasReady.value && currentFrame != null){
       console.log('frame', currentFrame)
-      canvasRenderer.setVideoFrame(currentFrame)
+     await canvasRenderer.setVideoFrame(currentFrame)
       canvasRenderer.canvasBackground()
     }
   })
@@ -200,7 +200,6 @@ onMounted(() => {
 
 const onFrameChange = (e) => {
   currentFrame.value = e.content
-  console.log('frame changed', e)
 }
 </script>
 
