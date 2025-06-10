@@ -9,8 +9,10 @@ import { migratePglite } from './db/migrate'
 
 import '@quasar/extras/material-icons/material-icons.css'
 import 'quasar/src/css/index.sass'
+import { createPinia } from 'pinia'
 
 const app = createApp(App)
+const pinia = createPinia()
 
 app
   .use(router)
@@ -18,5 +20,5 @@ app
     plugins: {},
   })
   .use(dependencyGraph)
-
+  .use(pinia)
 migratePglite().then(() => app.mount('#app'))
