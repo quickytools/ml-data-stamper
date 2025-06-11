@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch } from 'vue'
-import { SelectionArea } from '../box-editor/SelectionArea'
+import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
-
 
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
@@ -44,53 +43,52 @@ const mouseCanvasCoordinate = { x: 0, y: 0 } // this is the coordinate object th
 const selectionArea = new SelectionArea() // annotation box
 let canvasRenderer: CanvasRenderer
 
-  watch(currentFrame, async(currentFrame) => {// watches for frame changes
-    if(isCanvasReady.value && currentFrame != null){
-      console.log('frame', currentFrame)
-     await canvasRenderer.setVideoFrame(currentFrame)
-      canvasRenderer.canvasBackground()
-    }
-  })
+watch(currentFrame, async (currentFrame) => {
+  // watches for frame changes
+  if (isCanvasReady.value && currentFrame != null) {
+    await canvasRenderer.setVideoFrame(currentFrame)
+    canvasRenderer.canvasBackground()
+  }
+})
 
 const mouseDownOnCanvas = (action: MouseEvent) => {
-  const noController = canvasInteractionState.value
+  const interactionState = canvasInteractionState.value
   const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
   mouseCanvasCoordinate.x = x
   mouseCanvasCoordinate.y = y
 
   if ((action.button === 0 && action.ctrlKey) || action.button === 1) {
     canvasInteractionState.value = {
-      ...noController,
+      ...interactionState,
       isPanning: true,
     }
     const { e, f } = editorCanvas.value.getContext('2d').getTransform()
     panState.onStart({ x: e, y: f }, { x: action.clientX, y: action.clientY })
-  } else if (selectionArea.contains(mouseCanvasCoordinate)) {
-    selectionArea.storeUserClick(mouseCanvasCoordinate)
-
-    canvasInteractionState.value = {
-      ...noController,
-      isDraggable: true,
-    }
-  } else if (selectionArea.outerZoneDetection(mouseCanvasCoordinate)) {
-    // a series of boolean checks if users cursor is in the outer layer of the annotation box
-    //used for resizing
-    interactionCursor.value.sizingDirection.left =
-      selectionArea.checkLeftZone(mouseCanvasCoordinate)
-    interactionCursor.value.sizingDirection.right =
-      selectionArea.checkRightZone(mouseCanvasCoordinate)
-    interactionCursor.value.sizingDirection.top = selectionArea.checkTopZone(mouseCanvasCoordinate)
-    interactionCursor.value.sizingDirection.bottom =
-      selectionArea.checkBottomZone(mouseCanvasCoordinate)
-
-    canvasInteractionState.value = {
-      ...noController,
-      isResizing: true,
-    }
   } else {
-    canvasInteractionState.value = {
-      ...noController,
-      isDrawing: true,
+    const { isInside, isOutside, borderSide } = selectionArea.detectRegion(mouseCanvasCoordinate)
+    if (isInside) {
+      selectionArea.storeUserClick(mouseCanvasCoordinate)
+
+      canvasInteractionState.value = {
+        ...interactionState,
+        isDraggable: true,
+      }
+    } else if (borderSide != BorderSide.None) {
+      // TODO Corners
+      interactionCursor.value.sizingDirection.left = borderSide == BorderSide.Left
+      interactionCursor.value.sizingDirection.right = borderSide == BorderSide.Right
+      interactionCursor.value.sizingDirection.top = borderSide == BorderSide.Top
+      interactionCursor.value.sizingDirection.bottom = borderSide == BorderSide.Bottom
+
+      canvasInteractionState.value = {
+        ...interactionState,
+        isResizing: true,
+      }
+    } else {
+      canvasInteractionState.value = {
+        ...interactionState,
+        isDrawing: true,
+      }
     }
   }
 }
@@ -128,21 +126,18 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
   const temp = { x: x, y: y }
 
-  if (
-    !canvasInteractionState.value.isDraggable &&
-    !canvasInteractionState.value.isResizing &&
-    !canvasInteractionState.value.isDrawing
-  ) {
+  const { isPanning, isDraggable, isResizing, isDrawing } = canvasInteractionState.value
+  if (!isDraggable && !isResizing && !isDrawing) {
     interactionCursor.value.hovering = selectionArea.contains(temp)
   }
 
-  if (canvasInteractionState.value.isPanning) {
+  if (isPanning) {
     canvasRenderer.moveCanvasView(action)
-  } else if (canvasInteractionState.value.isDraggable) {
+  } else if (isDraggable) {
     canvasRenderer.movingRectangle(x, y)
-  } else if (canvasInteractionState.value.isResizing) {
+  } else if (isResizing) {
     canvasRenderer.resizingRectangle(x, y)
-  } else if (canvasInteractionState.value.isDrawing) {
+  } else if (isDrawing) {
     canvasRenderer.drawOnCanvas(mouseCanvasCoordinate.x, mouseCanvasCoordinate.y, x, y)
   }
 }
@@ -152,7 +147,7 @@ const keyUpOnCanvas = (keyCode) => {
     case 'KeyF':
       const canvas = editorCanvas.value
       const ctx = canvas.getContext('2d')
-      if (selectionArea.isDefined()) {
+      if (selectionArea.isDefined) {
         const xform = ctx.getTransform()
         ctx.setTransform(selectionArea.getBoundingTransform(xform))
       } else {
@@ -174,27 +169,25 @@ const keyOnCanvas = (e: MouseEvent) => {
 
 document.addEventListener('keyup', keyOnCanvas)
 
-
-
 onMounted(() => {
   const canvasWidth = 600
   const canvasHeight = 400
   editorCanvasWidth.value = canvasWidth
   editorCanvasHeight.value = canvasHeight
 
-    nextTick(()=>{
-      if(editorCanvas.value){
+  nextTick(() => {
+    if (editorCanvas.value) {
       canvasRenderer = new CanvasRenderer(
-      editorCanvas.value,
-      currentFrame.value,
-      editorScale.value,
-      panState,
-      selectionArea,
-      interactionCursor.value,
-    )
-    isCanvasReady.value = true
-    window.requestAnimationFrame(canvasRenderer.canvasBackground)
-   }
+        editorCanvas.value,
+        currentFrame.value,
+        editorScale.value,
+        panState,
+        selectionArea,
+        interactionCursor.value,
+      )
+      isCanvasReady.value = true
+      window.requestAnimationFrame(canvasRenderer.canvasBackground)
+    }
   })
 })
 

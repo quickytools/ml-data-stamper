@@ -56,24 +56,24 @@ export class CanvasRenderer {
     ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
 
     this.drawCheckerboard(canvas, {
-        startX,
-        startY,
-        width: scaledWidth,
-        height: scaledHeight,
-        lightColor: 'rgba(255, 255, 255, 0.80)',
-        darkColor: 'rgba(0, 0, 0, 0.05)',
-      })
+      startX,
+      startY,
+      width: scaledWidth,
+      height: scaledHeight,
+      lightColor: 'rgba(255, 255, 255, 0.80)',
+      darkColor: 'rgba(0, 0, 0, 0.05)',
+    })
     if (this.currentFrame.value != null) {
       ctx.drawImage(this.currentFrame.value, 0, 0)
     }
   }
 
-  setVideoFrame = async (videoFrame: any) =>{
+  setVideoFrame = async (videoFrame: any) => {
     const rawContent = toRaw(videoFrame)
-    try{
+    try {
       this.currentFrame.value = await createImageBitmap(rawContent)
-    }catch(e){
-      console.error("failed to create imageBitMap from frame.content: ", e)
+    } catch (e) {
+      console.error('failed to create imageBitMap from frame.content: ', e)
     }
   }
 
@@ -158,27 +158,27 @@ export class CanvasRenderer {
     // Handle each side resizing
     if (this.interactionCursor.value.sizingDirection.left) {
       const newWidth = this.selectionArea.x + this.selectionArea.width - x
-      if (newWidth >= this.selectionArea.outerLayer) {
+      if (newWidth >= this.selectionArea.borderSize) {
         this.selectionArea.x = x
         this.selectionArea.width = newWidth
       }
     }
     if (this.interactionCursor.value.sizingDirection.right) {
       const newWidth = x - this.selectionArea.x
-      if (newWidth >= this.selectionArea.outerLayer) {
+      if (newWidth >= this.selectionArea.borderSize) {
         this.selectionArea.width = newWidth
       }
     }
     if (this.interactionCursor.value.sizingDirection.top) {
       const newHeight = this.selectionArea.y + this.selectionArea.height - y
-      if (newHeight >= this.selectionArea.outerLayer) {
+      if (newHeight >= this.selectionArea.borderSize) {
         this.selectionArea.y = y
         this.selectionArea.height = newHeight
       }
     }
     if (this.interactionCursor.value.sizingDirection.bottom) {
       const newHeight = y - this.selectionArea.y
-      if (newHeight >= this.selectionArea.outerLayer) {
+      if (newHeight >= this.selectionArea.borderSize) {
         this.selectionArea.height = newHeight
       }
     }
