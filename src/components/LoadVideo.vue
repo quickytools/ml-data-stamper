@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTemplateRef, ref, watch, inject, onMounted } from 'vue'
+import { useTemplateRef, ref, watch, inject, onMounted, defineProps, defineEmits } from 'vue'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
@@ -10,6 +10,20 @@ import { ClientSideVideoLoader } from '../video-load/ClientSideVideoLoader'
 import { pipeline, RawImage } from '@huggingface/transformers'
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
+const props = defineProps({
+  isEventEmitter: {
+    type: Boolean,
+    default: false,
+  }, // true emits video data as event false renders frame in component camvas
+})
+
+const emit = defineEmits<{
+  /**
+   * On video data load and frame change the frame content, frame width, and frame height is emitted.
+   */
+  frameChange: [content: any, width: number, height: number],
+  }>()
+
 const sourceVideoRepository = inject('source-video-repository')
 
 const fileInput = useTemplateRef('file')
@@ -18,11 +32,13 @@ const videoCanvasWidth = ref(0)
 const videoCanvasHeight = ref(0)
 const sliderFrameIndex = ref(0)
 
+
 const videoSrc = ref('')
+
+const videoFrames = ref([])
 
 const videoDataSubject = new Subject()
 
-const videoFrames = ref([])
 let canvasRotation = 0
 
 const isLoadingDetector = ref(false)
@@ -65,18 +81,28 @@ const seekVideoData = useObservable(
 
 const loadFrame = (index, frames) => {
   if (frames && index >= 0 && index < frames.length) {
-    const ctx = videoCanvas.value.getContext('2d')
     const frame = frames[index]
+    if(props.isEventEmitter){
+      emit('frameChange', {
+        content: frame.content,
+        width: videoCanvasWidth.value,
+        height: videoCanvasHeight.value
+      })
+    }else{
+    const ctx = videoCanvas.value.getContext('2d')
     ctx.putImageData(frame.content, 0, 0)
+    }
   }
 }
 
 watch(seekVideoData, (value, prev) => {
   const { width, height, frames, orientation } = value
 
-  const canvas = videoCanvas.value
-  const ctx = canvas.getContext('2d')
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  if(!props.isEventEmitter){
+    const canvas = videoCanvas.value
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
 
   if (frames?.length > 0) {
     videoCanvasWidth.value = width
@@ -84,13 +110,13 @@ watch(seekVideoData, (value, prev) => {
     videoFrames.value = frames
     canvasRotation = (orientation * Math.PI) / 180
     // TODO Find canvas resize or similar event
-    setTimeout(() => {
+    setTimeout(async () => {
       loadFrame(0, frames)
     }, 100)
   }
 })
 
-watch(sliderFrameIndex, (index) => {
+watch(sliderFrameIndex, async (index) => {
   loadFrame(index, videoFrames.value)
 })
 
@@ -147,12 +173,18 @@ div.column
         switch-label-side
         v-if="videoFrames.length>0"
       )
-  canvas(ref="videoCanvas" :width='videoCanvasWidth' :height='videoCanvasHeight')
+  canvas(ref="videoCanvas"
+  v-if="!props.isEventEmitter"
+  :width='videoCanvasWidth'
+  :height='videoCanvasHeight'
+
+  )
 </template>
 
 <style scoped>
 /* TODO Better styling */
 .frame-seeker {
+  min-width: 200px;
   max-width: 600px;
 }
 </style>
