@@ -191,11 +191,10 @@ export class CanvasRenderer {
     ctx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
   }
 
-  getMousePositionOnCanvas(action: MouseEvent) {
+  getCanvasCoordinates(viewCoordinates: { x: number; y: number }) {
     const ctx = this.ctx
 
-    const x = action.offsetX
-    const y = action.offsetY
+    const { x, y } = viewCoordinates
 
     const transform = ctx.getTransform()
     const transformedPoint = new DOMPoint(x, y).matrixTransform(transform.inverse())

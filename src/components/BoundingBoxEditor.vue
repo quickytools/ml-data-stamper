@@ -14,6 +14,12 @@ const canvasInteractionState = ref({
   isDrawing: false,
   isDraggable: false,
   isResizing: false,
+  resizeSide: {
+    isTop: false,
+    isRight: false,
+    isBottom: false,
+    isLeft: false,
+  },
   isPanning: false,
 })
 const interactionCursor = ref({
@@ -48,8 +54,8 @@ const panState = {
   },
 }
 
-const mouseCanvasCoordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
-const selectionArea = new SelectionArea() // annotation box
+const canvasCoordinates = { x: 0, y: 0 }
+const selectionArea = new SelectionArea()
 let canvasRenderer: CanvasRenderer
 
 watch(currentFrame, async (currentFrame) => {
@@ -60,12 +66,15 @@ watch(currentFrame, async (currentFrame) => {
   }
 })
 
-const mouseDownOnCanvas = (action: MouseEvent) => {
-  const interactionState = canvasInteractionState.value
-  const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
-  mouseCanvasCoordinate.x = x
-  mouseCanvasCoordinate.y = y
+const getCanvasCoordinates = (action: MouseEvent) =>
+  canvasRenderer.getCanvasCoordinates({ x: action.offsetX, y: action.offsetY })
 
+const mouseDownOnCanvas = (action: MouseEvent) => {
+  const { x, y } = getCanvasCoordinates(action)
+  canvasCoordinates.x = x
+  canvasCoordinates.y = y
+
+  const interactionState = canvasInteractionState.value
   if ((action.button === 0 && action.ctrlKey) || action.button === 1) {
     canvasInteractionState.value = {
       ...interactionState,
@@ -74,12 +83,12 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
     const { e, f } = editorCanvas.value.getContext('2d').getTransform()
     panState.onStart({ x: e, y: f }, { x: action.clientX, y: action.clientY })
   } else {
-    const { isInside, isOutside, borderSide } = selectionArea.detectRegion(mouseCanvasCoordinate)
+    const { isInside, isOutside, borderSide } = selectionArea.detectRegion(canvasCoordinates)
 
     interactionCursor.value.resizeBorder = borderSide
 
     if (isInside) {
-      selectionArea.storeUserClick(mouseCanvasCoordinate)
+      selectionArea.storeUserClick(canvasCoordinates)
 
       canvasInteractionState.value = {
         ...interactionState,
@@ -89,6 +98,12 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
       canvasInteractionState.value = {
         ...interactionState,
         isResizing: true,
+        resizeSide: {
+          isTop: topBorderSides.has(borderSide),
+          isRight: rightBorderSides.has(borderSide),
+          isBottom: bottomBorderSides.has(borderSide),
+          isLeft: leftBorderSides.has(borderSide),
+        },
       }
     } else {
       canvasInteractionState.value = {
@@ -106,9 +121,9 @@ const mouseWheelOnCanvas = (action: WheelEvent) => {
 
   action.preventDefault()
 
-  const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
-  mouseCanvasCoordinate.x = x
-  mouseCanvasCoordinate.y = y
+  const { x, y } = getCanvasCoordinates(action)
+  canvasCoordinates.x = x
+  canvasCoordinates.y = y
 
   canvasRenderer.zoom({ x: action.offsetX, y: action.offsetY }, action.deltaY)
 }
@@ -124,9 +139,9 @@ const mouseUpOnCanvas = () => {
 }
 
 const mouseMoveOnCanvas = (action: MouseEvent) => {
-  const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
+  const { x, y } = getCanvasCoordinates(action)
 
-  const { isPanning, isDraggable, isResizing, isDrawing } = canvasInteractionState.value
+  const { isPanning, isDraggable, isResizing, isDrawing, resizeSide } = canvasInteractionState.value
 
   const borderSide = interactionCursor.value.resizeBorder
   const isHovering = !(isDraggable || isResizing || isDrawing)
@@ -140,17 +155,9 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   } else if (isDraggable) {
     canvasRenderer.movingRectangle(x, y)
   } else if (isResizing) {
-    canvasRenderer.resizingRectangle(
-      { x, y },
-      {
-        isTop: topBorderSides.has(borderSide),
-        isRight: rightBorderSides.has(borderSide),
-        isBottom: bottomBorderSides.has(borderSide),
-        isLeft: leftBorderSides.has(borderSide),
-      },
-    )
+    canvasRenderer.resizingRectangle({ x, y }, resizeSide)
   } else if (isDrawing) {
-    canvasRenderer.drawOnCanvas(mouseCanvasCoordinate.x, mouseCanvasCoordinate.y, x, y)
+    canvasRenderer.drawOnCanvas(canvasCoordinates.x, canvasCoordinates.y, x, y)
   } else {
     const {
       isInside,
