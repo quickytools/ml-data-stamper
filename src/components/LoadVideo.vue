@@ -21,8 +21,8 @@ const emit = defineEmits<{
   /**
    * On video data load and frame change the frame content, frame width, and frame height is emitted.
    */
-  frameChange: [content: any, width: number, height: number],
-  }>()
+  frameChange: [content: any, width: number, height: number]
+}>()
 
 const sourceVideoRepository = inject('source-video-repository')
 
@@ -31,7 +31,6 @@ const videoCanvas = ref()
 const videoCanvasWidth = ref(0)
 const videoCanvasHeight = ref(0)
 const sliderFrameIndex = ref(0)
-
 
 const videoSrc = ref('')
 
@@ -82,15 +81,15 @@ const seekVideoData = useObservable(
 const loadFrame = (index, frames) => {
   if (frames && index >= 0 && index < frames.length) {
     const frame = frames[index]
-    if(props.isEventEmitter){
+    if (props.isEventEmitter) {
       emit('frameChange', {
         content: frame.content,
         width: videoCanvasWidth.value,
-        height: videoCanvasHeight.value
+        height: videoCanvasHeight.value,
       })
-    }else{
-    const ctx = videoCanvas.value.getContext('2d')
-    ctx.putImageData(frame.content, 0, 0)
+    } else {
+      const ctx = videoCanvas.value.getContext('2d')
+      ctx.putImageData(frame.content, 0, 0)
     }
   }
 }
@@ -98,7 +97,7 @@ const loadFrame = (index, frames) => {
 watch(seekVideoData, (value, prev) => {
   const { width, height, frames, orientation } = value
 
-  if(!props.isEventEmitter){
+  if (!props.isEventEmitter) {
     const canvas = videoCanvas.value
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height)

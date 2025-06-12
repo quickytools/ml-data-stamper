@@ -75,7 +75,6 @@ export class SelectionArea {
   getBoundingTransform(viewXform: { a: number }): DOMMatrix {
     // TODO Center on view bounds
     const { a } = viewXform
-    const inverseScale = a > 0 ? 1 / a : 1
     return new DOMMatrix([a, 0, 0, a, -this.x * a, -this.y * a])
   }
 
@@ -127,6 +126,7 @@ export class SelectionArea {
 
     const { x, y } = coordinate
     if (
+      !this.isDefined ||
       x < this.horizontalBorderMin ||
       x > this.horizontalBorderMax ||
       y < this.verticalBorderMin ||
