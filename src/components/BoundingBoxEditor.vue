@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, toRaw } from 'vue'
 import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
@@ -7,7 +7,7 @@ import LoadVideo from './LoadVideo.vue'
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
-const editorScale = ref(1) //  scale factor for the canvas, used for zooming in and out
+//const editorScale = ref(1) scale factor for the canvas, used for zooming in and out
 const isCanvasReady = ref(false)
 const currentFrame = ref(null)
 const canvasInteractionState = ref({
@@ -61,8 +61,14 @@ let canvasRenderer: CanvasRenderer
 watch(currentFrame, async (currentFrame) => {
   // watches for frame changes
   if (isCanvasReady.value && currentFrame != null) {
-    await canvasRenderer.setVideoFrame(currentFrame)
-    canvasRenderer.canvasBackground()
+    try {
+      const rawContent = toRaw(currentFrame)
+      const bitImage = await createImageBitmap(rawContent)
+      await canvasRenderer.setVideoFrame(bitImage)
+      canvasRenderer.canvasBackground()
+    } catch (e) {
+      console.error('failed to create imageBitMap from frame.content: ', e)
+    }
   }
 })
 
@@ -151,11 +157,13 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   let showBorderResize = borderSide
 
   if (isPanning) {
-    canvasRenderer.moveCanvasView(action)
+    const currentCoordinates = { x: action.clientX, y: action.clientY }
+    const { x, y } = panState.onMove(currentCoordinates)
+    canvasRenderer.panCanvasView({ x, y })
   } else if (isDraggable) {
-    canvasRenderer.movingRectangle(x, y)
+    canvasRenderer.updateSelectionPosition(x, y)
   } else if (isResizing) {
-    canvasRenderer.resizingRectangle({ x, y }, resizeSide)
+    canvasRenderer.resizeSelectionArea({ x, y }, resizeSide)
   } else if (isDrawing) {
     canvasRenderer.drawOnCanvas(canvasCoordinates.x, canvasCoordinates.y, x, y)
   } else {
@@ -211,13 +219,7 @@ onMounted(() => {
 
   nextTick(() => {
     if (editorCanvas.value) {
-      canvasRenderer = new CanvasRenderer(
-        editorCanvas.value,
-        currentFrame.value,
-        editorScale.value,
-        panState,
-        selectionArea,
-      )
+      canvasRenderer = new CanvasRenderer(editorCanvas.value, currentFrame.value, selectionArea)
       isCanvasReady.value = true
       window.requestAnimationFrame(canvasRenderer.canvasBackground)
     }

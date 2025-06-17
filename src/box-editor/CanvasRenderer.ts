@@ -1,27 +1,20 @@
-import { ref, toRaw } from 'vue'
 import { SelectionArea } from '../box-editor/SelectionArea'
 
 export class CanvasRenderer {
-  private currentFrame = ref()
-  private editorCanvas = ref()
+  private imageForeground: ImageBitmap | null
+  private editorCanvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
-  private editorScale = ref()
 
-  private panState
   private selectionArea = new SelectionArea()
 
   constructor(
     editorCanvas: HTMLCanvasElement,
-    currentFrame: null,
-    editorScale: number,
-    panState,
+    imageForeground: ImageBitmap | null,
     selectionArea: SelectionArea,
   ) {
-    this.editorCanvas.value = editorCanvas
+    this.editorCanvas = editorCanvas
     this.ctx = editorCanvas.getContext('2d')!
-    this.currentFrame.value = currentFrame
-    this.editorScale.value = editorScale
-    this.panState = panState
+    this.imageForeground = imageForeground
     this.selectionArea = selectionArea
   }
 
@@ -40,9 +33,8 @@ export class CanvasRenderer {
   }
 
   canvasBackground = () => {
-    const canvas = this.editorCanvas.value
-    const ctx = this.ctx
-    const { a, e, f } = ctx.getTransform()
+    const canvas = this.editorCanvas
+    const { a, e, f } = this.ctx.getTransform()
 
     const inverseScale = a > 0 ? 1 / a : 1
     const canvasWidth = canvas.width
@@ -52,7 +44,7 @@ export class CanvasRenderer {
     const startX = -e * inverseScale
     const startY = -f * inverseScale
 
-    ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
+    this.ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
 
     this.drawCheckerboard({
       startX,
@@ -62,18 +54,13 @@ export class CanvasRenderer {
       lightColor: 'rgba(255, 255, 255, 0.80)',
       darkColor: 'rgba(0, 0, 0, 0.05)',
     })
-    if (this.currentFrame.value != null) {
-      ctx.drawImage(this.currentFrame.value, 0, 0)
+    if (this.imageForeground != null) {
+      this.ctx.drawImage(this.imageForeground, 0, 0)
     }
   }
 
-  setVideoFrame = async (videoFrame: any) => {
-    const rawContent = toRaw(videoFrame)
-    try {
-      this.currentFrame.value = await createImageBitmap(rawContent)
-    } catch (e) {
-      console.error('failed to create imageBitMap from frame.content: ', e)
-    }
+  setVideoFrame = async (bitImage: ImageBitmap) => {
+    this.imageForeground = bitImage
   }
 
   zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
@@ -95,20 +82,15 @@ export class CanvasRenderer {
       .translate(-x, -y)
       .multiply(xform)
 
-    this.editorScale = newScale
-
     ctx.setTransform(updatedXform)
 
     this.canvasBackground() // redraws the background
     this.drawRect(this.selectionArea)
   }
 
-  moveCanvasView = (action: MouseEvent) => {
-    const currentCoordinates = { x: action.clientX, y: action.clientY }
-    const { x, y } = this.panState.onMove(currentCoordinates)
-    const ctx = this.editorCanvas.value.getContext('2d')
-    const { a } = ctx.getTransform()
-    ctx.setTransform(a, 0, 0, a, x, y)
+  panCanvasView = (coordinate: { x: number; y: number }) => {
+    const { a } = this.ctx.getTransform()
+    this.ctx.setTransform(a, 0, 0, a, coordinate.x, coordinate.y)
 
     this.canvasBackground()
     this.drawRect(this.selectionArea)
@@ -131,7 +113,7 @@ export class CanvasRenderer {
   }
 
   // function to move the rectangle
-  movingRectangle = (x: number, y: number) => {
+  updateSelectionPosition = (x: number, y: number) => {
     this.canvasBackground()
 
     this.selectionArea.move(x, y)
@@ -139,8 +121,7 @@ export class CanvasRenderer {
     this.drawRect(this.selectionArea)
   }
 
-  // model function to resize the rectangle
-  resizingRectangle = (
+  resizeSelectionArea = (
     coordinate: { x: number; y: number },
     isResizing: {
       isTop: boolean
