@@ -6,8 +6,6 @@ import { useObservable } from '@vueuse/rxjs'
 
 import { ClientSideVideoLoader } from '../video-load/ClientSideVideoLoader'
 
-// TODO Refactor loading video data, rendering frame data
-import { pipeline, RawImage } from '@huggingface/transformers'
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const props = defineProps({
@@ -90,6 +88,20 @@ const loadFrame = (index, frames) => {
     } else {
       const ctx = videoCanvas.value.getContext('2d')
       ctx.putImageData(frame.content, 0, 0)
+
+      // TODO Improve structure
+      loadDetector().then(async () => {
+        const detected = await detectObjects(videoCanvas.value)
+        const detectedSportsBall = detected
+          .filter(({ score, label }) => label == 'sports ball' && score > 0.9)
+          .sort((a, b) => b.score - a.score)
+        if (detectedSportsBall.length) {
+          const firstDetection = detectedSportsBall[0]
+          console.log('Highest confidence detection', firstDetection.box, firstDetection)
+        } else {
+          console.log('High confidence sports ball not detected', detected)
+        }
+      })
     }
   }
 }
@@ -147,14 +159,18 @@ const onFileChange = (e) => {
   }
 }
 
+const sampleDetection = () => {
+  loadDetector().then(async () => {
+    const tennisImage =
+      'https://static.nike.com/a/images/f_auto/dpr_3.0,cs_srgb/h_484,c_limit/193ecef7-04df-45a4-a9aa-0643cf7ba4be/how-to-teach-the-tennis-serve-to-adults.jpg'
+    const detected = await detectObjects(tennisImage)
+    console.log('detected', detected)
+  })
+}
+
 onMounted(() => {
   // TODO Demonstrates object detection on URL image. Delete once detection on video frames is complete.
-  // loadDetector().then(async () => {
-  //   const tennisImage =
-  //     'https://static.nike.com/a/images/f_auto/dpr_3.0,cs_srgb/h_484,c_limit/193ecef7-04df-45a4-a9aa-0643cf7ba4be/how-to-teach-the-tennis-serve-to-adults.jpg'
-  //   const detected = await detectObjects(tennisImage)
-  //   console.log('detected', detected)
-  // })
+  // sampleDetection()
 })
 </script>
 

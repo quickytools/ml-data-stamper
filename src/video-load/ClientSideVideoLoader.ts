@@ -1,6 +1,7 @@
 import type { VideoLoader } from './VideoLoader'
 import { getFileSignature } from '@/util/fileUtil'
 
+// TODO Use local module
 import getVideoFrames from 'https://deno.land/x/get_video_frames@v0.0.10/mod.js'
 
 type VideoFileProperties = {
