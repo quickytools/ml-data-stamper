@@ -149,12 +149,12 @@ const onFileChange = (e) => {
 
 onMounted(() => {
   // TODO Demonstrates object detection on URL image. Delete once detection on video frames is complete.
-  // loadDetector().then(async () => {
-  //   const tennisImage =
-  //     'https://static.nike.com/a/images/f_auto/dpr_3.0,cs_srgb/h_484,c_limit/193ecef7-04df-45a4-a9aa-0643cf7ba4be/how-to-teach-the-tennis-serve-to-adults.jpg'
-  //   const detected = await detectObjects(tennisImage)
-  //   console.log('detected', detected)
-  // })
+  loadDetector().then(async () => {
+    const tennisImage =
+      'https://static.nike.com/a/images/f_auto/dpr_3.0,cs_srgb/h_484,c_limit/193ecef7-04df-45a4-a9aa-0643cf7ba4be/how-to-teach-the-tennis-serve-to-adults.jpg'
+    const detected = await detectObjects(tennisImage)
+    console.log('detected', detected)
+  })
 })
 </script>
 

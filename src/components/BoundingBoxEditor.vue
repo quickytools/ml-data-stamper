@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, toRaw } from 'vue'
+import { ref, onMounted, nextTick, watch, toRaw, onBeforeUnmount } from 'vue'
 import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
+import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
-//const editorScale = ref(1) scale factor for the canvas, used for zooming in and out
 const isCanvasReady = ref(false)
-const currentFrame = ref(null)
+const imageData = ref<{
+  content: ImageData
+  width: number
+  height: number
+} | null>(null)
+const isLoadingDetector = ref(false)
+const isDetectingObjects = ref(false)
 const canvasInteractionState = ref({
   isDrawing: false,
   isDraggable: false,
@@ -56,18 +62,55 @@ const panState = {
 
 const canvasCoordinates = { x: 0, y: 0 }
 const selectionArea = new SelectionArea()
+const objectDetector = new YoloObjectDetector()
+let detectDelayTimer: ReturnType<typeof window.setTimeout>
 let canvasRenderer: CanvasRenderer
 
-watch(currentFrame, async (currentFrame) => {
+objectDetector.addEventListener('loading', ({ detail }) => {
+  isLoadingDetector.value = detail
+})
+objectDetector.addEventListener('detecting', ({ detail }) => {
+  isDetectingObjects.value = detail
+})
+
+const loadDetector = async () => {
+  await objectDetector.load()
+}
+
+const detectObjects = async (imageData) => {
+  return objectDetector.detect(imageData)
+}
+
+function imageDataToCanvas(imageData: ImageData) {
+  const canvas = document.createElement('canvas')
+  canvas.width = imageData.width
+  canvas.height = imageData.height
+
+  const ctx = canvas.getContext('2d')
+  ctx.putImageData(imageData, 0, 0)
+  return canvas
+}
+
+watch(imageData, async (currentFrame) => {
   // watches for frame changes
   if (isCanvasReady.value && currentFrame != null) {
     try {
-      const rawContent = toRaw(currentFrame)
+      const rawContent = toRaw(currentFrame.content)
       const bitImage = await createImageBitmap(rawContent)
       await canvasRenderer.setVideoFrame(bitImage)
       canvasRenderer.canvasBackground()
+      clearTimeout(detectDelayTimer)
+      detectDelayTimer = setTimeout(async () => {
+        try {
+          const convertedImage = imageDataToCanvas(currentFrame.content)
+          const detected = await detectObjects(convertedImage)
+          console.log('detected: ', detected)
+        } catch (e) {
+          console.error('failed to convert ImageData from currentFrame.content: ', e)
+        }
+      }, 300)
     } catch (e) {
-      console.error('failed to create imageBitMap from frame.content: ', e)
+      console.error('failed to create imageBitMap from currentFrame.content: ', e)
     }
   }
 })
@@ -219,7 +262,8 @@ onMounted(() => {
 
   nextTick(() => {
     if (editorCanvas.value) {
-      canvasRenderer = new CanvasRenderer(editorCanvas.value, currentFrame.value, selectionArea)
+      canvasRenderer = new CanvasRenderer(editorCanvas.value, imageData.value, selectionArea)
+      loadDetector()
       isCanvasReady.value = true
       window.requestAnimationFrame(canvasRenderer.canvasBackground)
     }
@@ -227,7 +271,7 @@ onMounted(() => {
 })
 
 const onFrameChange = (e) => {
-  currentFrame.value = e.content
+  imageData.value = e
 }
 </script>
 
