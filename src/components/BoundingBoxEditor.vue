@@ -1,27 +1,47 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
-import { SelectionArea } from '../box-editor/SelectionArea'
+import { ref, onMounted, nextTick, watch, toRaw, onBeforeUnmount } from 'vue'
+import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
-
+import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
-const editorScale = ref(1) //  scale factor for the canvas, used for zooming in and out
 const isCanvasReady = ref(false)
-const currentFrame = ref(null)
+const imageData = ref<{
+  content: ImageData
+  width: number
+  height: number
+} | null>(null)
+const isLoadingDetector = ref(false)
+const isDetectingObjects = ref(false)
 const canvasInteractionState = ref({
   isDrawing: false,
   isDraggable: false,
   isResizing: false,
+  resizeSide: {
+    isTop: false,
+    isRight: false,
+    isBottom: false,
+    isLeft: false,
+  },
   isPanning: false,
 })
 const interactionCursor = ref({
-  sizingDirection: { left: false, right: false, top: false, bottom: false },
+  resizeBorder: BorderSide.None,
   hovering: false,
   crosshair: false,
 })
+const topBorderSides = new Set([BorderSide.Top, BorderSide.TopRight, BorderSide.TopLeft])
+const rightBorderSides = new Set([BorderSide.Right, BorderSide.TopRight, BorderSide.BottomRight])
+const bottomBorderSides = new Set([
+  BorderSide.Bottom,
+  BorderSide.BottomRight,
+  BorderSide.BottomLeft,
+])
+const leftBorderSides = new Set([BorderSide.Left, BorderSide.TopLeft, BorderSide.BottomLeft])
+
 const panState = {
   zeroCoordinates: { x: 0, y: 0 },
   startPanCoordinates: { x: 0, y: 0 },
@@ -40,57 +60,124 @@ const panState = {
   },
 }
 
-const mouseCanvasCoordinate = { x: 0, y: 0 } // this is the coordinate object that will be used to store the mouse position on the canvas
-const selectionArea = new SelectionArea() // annotation box
+const canvasCoordinates = { x: 0, y: 0 }
+const selectionArea = new SelectionArea()
+const objectDetector = new YoloObjectDetector()
+let detectDelayTimer: ReturnType<typeof window.setTimeout>
 let canvasRenderer: CanvasRenderer
 
-  watch(currentFrame, async(currentFrame) => {// watches for frame changes
-    if(isCanvasReady.value && currentFrame != null){
-      console.log('frame', currentFrame)
-     await canvasRenderer.setVideoFrame(currentFrame)
+objectDetector.addEventListener('loading', ({ detail }) => {
+  isLoadingDetector.value = detail
+})
+objectDetector.addEventListener('detecting', ({ detail }) => {
+  isDetectingObjects.value = detail
+})
+
+const loadDetector = async () => {
+  await objectDetector.load()
+}
+
+const detectObjects = async (imageData) => {
+  return objectDetector.detect(imageData)
+}
+
+function imageDataToCanvas(imageData: ImageData) {
+  const canvas = document.createElement('canvas')
+  canvas.width = imageData.width
+  canvas.height = imageData.height
+
+  const ctx = canvas.getContext('2d')
+  ctx.putImageData(imageData, 0, 0)
+  return canvas
+}
+
+watch(imageData, async (currentFrame) => {
+  // watches for frame changes
+  if (isCanvasReady.value && currentFrame != null) {
+    try {
+      const rawContent = toRaw(currentFrame.content)
+      const bitImage = await createImageBitmap(rawContent)
+      await canvasRenderer.setVideoFrame(bitImage)
       canvasRenderer.canvasBackground()
+      clearTimeout(detectDelayTimer)
+      detectDelayTimer = setTimeout(async () => {
+        try {
+          const convertedImage = imageDataToCanvas(currentFrame.content)
+          const detected = await detectObjects(convertedImage)
+          console.log('detected: ', detected)
+          const detectedSportsBall = detected
+            .filter(
+              ({ score, label }: { score: number; label: string }) =>
+                label === 'sports ball' && score > 0.9,
+            )
+            .sort((a: { score: number }, b: { score: number }) => b.score - a.score)
+          if (detectedSportsBall[0]?.box) {
+            console.log(
+              'Highest confidence detection',
+              detectedSportsBall[0].box,
+              detectedSportsBall[0],
+            )
+            canvasRenderer.drawOnCanvas(
+              detectedSportsBall[0].box.xmin,
+              detectedSportsBall[0].box.ymin,
+              detectedSportsBall[0].box.xmax,
+              detectedSportsBall[0].box.ymax,
+            )
+          }
+        } catch (e) {
+          console.error('failed to convert ImageData from currentFrame.content: ', e)
+        }
+      }, 300)
+    } catch (e) {
+      console.error('failed to create imageBitMap from currentFrame.content: ', e)
     }
-  })
+  }
+})
+
+const getCanvasCoordinates = (action: MouseEvent) =>
+  canvasRenderer.getCanvasCoordinates({ x: action.offsetX, y: action.offsetY })
 
 const mouseDownOnCanvas = (action: MouseEvent) => {
-  const noController = canvasInteractionState.value
-  const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
-  mouseCanvasCoordinate.x = x
-  mouseCanvasCoordinate.y = y
+  const { x, y } = getCanvasCoordinates(action)
+  canvasCoordinates.x = x
+  canvasCoordinates.y = y
 
+  const interactionState = canvasInteractionState.value
   if ((action.button === 0 && action.ctrlKey) || action.button === 1) {
     canvasInteractionState.value = {
-      ...noController,
+      ...interactionState,
       isPanning: true,
     }
     const { e, f } = editorCanvas.value.getContext('2d').getTransform()
     panState.onStart({ x: e, y: f }, { x: action.clientX, y: action.clientY })
-  } else if (selectionArea.contains(mouseCanvasCoordinate)) {
-    selectionArea.storeUserClick(mouseCanvasCoordinate)
-
-    canvasInteractionState.value = {
-      ...noController,
-      isDraggable: true,
-    }
-  } else if (selectionArea.outerZoneDetection(mouseCanvasCoordinate)) {
-    // a series of boolean checks if users cursor is in the outer layer of the annotation box
-    //used for resizing
-    interactionCursor.value.sizingDirection.left =
-      selectionArea.checkLeftZone(mouseCanvasCoordinate)
-    interactionCursor.value.sizingDirection.right =
-      selectionArea.checkRightZone(mouseCanvasCoordinate)
-    interactionCursor.value.sizingDirection.top = selectionArea.checkTopZone(mouseCanvasCoordinate)
-    interactionCursor.value.sizingDirection.bottom =
-      selectionArea.checkBottomZone(mouseCanvasCoordinate)
-
-    canvasInteractionState.value = {
-      ...noController,
-      isResizing: true,
-    }
   } else {
-    canvasInteractionState.value = {
-      ...noController,
-      isDrawing: true,
+    const { isInside, isOutside, borderSide } = selectionArea.detectRegion(canvasCoordinates)
+
+    interactionCursor.value.resizeBorder = borderSide
+
+    if (isInside) {
+      selectionArea.storeUserClick(canvasCoordinates)
+
+      canvasInteractionState.value = {
+        ...interactionState,
+        isDraggable: true,
+      }
+    } else if (borderSide != BorderSide.None) {
+      canvasInteractionState.value = {
+        ...interactionState,
+        isResizing: true,
+        resizeSide: {
+          isTop: topBorderSides.has(borderSide),
+          isRight: rightBorderSides.has(borderSide),
+          isBottom: bottomBorderSides.has(borderSide),
+          isLeft: leftBorderSides.has(borderSide),
+        },
+      }
+    } else {
+      canvasInteractionState.value = {
+        ...interactionState,
+        isDrawing: true,
+      }
     }
   }
 }
@@ -102,9 +189,9 @@ const mouseWheelOnCanvas = (action: WheelEvent) => {
 
   action.preventDefault()
 
-  const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
-  mouseCanvasCoordinate.x = x
-  mouseCanvasCoordinate.y = y
+  const { x, y } = getCanvasCoordinates(action)
+  canvasCoordinates.x = x
+  canvasCoordinates.y = y
 
   canvasRenderer.zoom({ x: action.offsetX, y: action.offsetY }, action.deltaY)
 }
@@ -116,34 +203,46 @@ const mouseUpOnCanvas = () => {
     isResizing: false,
     isPanning: false,
   }
-  interactionCursor.value.sizingDirection = {
-    left: false,
-    right: false,
-    top: false,
-    bottom: false,
-  }
+  interactionCursor.value.resizeBorder = BorderSide.None
 }
 
 const mouseMoveOnCanvas = (action: MouseEvent) => {
-  const { x, y } = canvasRenderer.getMousePositionOnCanvas(action)
-  const temp = { x: x, y: y }
+  const { x, y } = getCanvasCoordinates(action)
 
-  if (
-    !canvasInteractionState.value.isDraggable &&
-    !canvasInteractionState.value.isResizing &&
-    !canvasInteractionState.value.isDrawing
-  ) {
-    interactionCursor.value.hovering = selectionArea.contains(temp)
+  const { isPanning, isDraggable, isResizing, isDrawing, resizeSide } = canvasInteractionState.value
+
+  const borderSide = interactionCursor.value.resizeBorder
+  const isHovering = !(isDraggable || isResizing || isDrawing)
+
+  let showHover = isHovering
+  let showCrosshair = isDrawing
+  let showBorderResize = borderSide
+
+  if (isPanning) {
+    const currentCoordinates = { x: action.clientX, y: action.clientY }
+    const { x, y } = panState.onMove(currentCoordinates)
+    canvasRenderer.panCanvasView({ x, y })
+  } else if (isDraggable) {
+    canvasRenderer.updateSelectionPosition(x, y)
+  } else if (isResizing) {
+    canvasRenderer.resizeSelectionArea({ x, y }, resizeSide)
+  } else if (isDrawing) {
+    canvasRenderer.drawOnCanvas(canvasCoordinates.x, canvasCoordinates.y, x, y)
+  } else {
+    const {
+      isInside,
+      isOutside,
+      borderSide: hoverBorderSide,
+    } = selectionArea.detectRegion({ x, y })
+    showBorderResize = hoverBorderSide
+    showCrosshair = isOutside
+    showHover = isInside
   }
 
-  if (canvasInteractionState.value.isPanning) {
-    canvasRenderer.moveCanvasView(action)
-  } else if (canvasInteractionState.value.isDraggable) {
-    canvasRenderer.movingRectangle(x, y)
-  } else if (canvasInteractionState.value.isResizing) {
-    canvasRenderer.resizingRectangle(x, y)
-  } else if (canvasInteractionState.value.isDrawing) {
-    canvasRenderer.drawOnCanvas(mouseCanvasCoordinate.x, mouseCanvasCoordinate.y, x, y)
+  interactionCursor.value = {
+    resizeBorder: showBorderResize,
+    hovering: showHover,
+    crosshair: showCrosshair,
   }
 }
 
@@ -152,14 +251,14 @@ const keyUpOnCanvas = (keyCode) => {
     case 'KeyF':
       const canvas = editorCanvas.value
       const ctx = canvas.getContext('2d')
-      if (selectionArea.isDefined()) {
+      if (selectionArea.isDefined) {
         const xform = ctx.getTransform()
         ctx.setTransform(selectionArea.getBoundingTransform(xform))
       } else {
         ctx.setTransform(new DOMMatrix())
       }
       canvasRenderer.canvasBackground()
-      canvasRenderer.paintIt(selectionArea)
+      canvasRenderer.drawRect(selectionArea)
       break
   }
 }
@@ -174,32 +273,24 @@ const keyOnCanvas = (e: MouseEvent) => {
 
 document.addEventListener('keyup', keyOnCanvas)
 
-
-
 onMounted(() => {
   const canvasWidth = 600
   const canvasHeight = 400
   editorCanvasWidth.value = canvasWidth
   editorCanvasHeight.value = canvasHeight
 
-    nextTick(()=>{
-      if(editorCanvas.value){
-      canvasRenderer = new CanvasRenderer(
-      editorCanvas.value,
-      currentFrame.value,
-      editorScale.value,
-      panState,
-      selectionArea,
-      interactionCursor.value,
-    )
-    isCanvasReady.value = true
-    window.requestAnimationFrame(canvasRenderer.canvasBackground)
-   }
+  nextTick(() => {
+    if (editorCanvas.value) {
+      canvasRenderer = new CanvasRenderer(editorCanvas.value, imageData.value, selectionArea)
+      loadDetector()
+      isCanvasReady.value = true
+      window.requestAnimationFrame(canvasRenderer.canvasBackground)
+    }
   })
 })
 
 const onFrameChange = (e) => {
-  currentFrame.value = e.content
+  imageData.value = e
 }
 </script>
 
@@ -211,7 +302,7 @@ div
         ref="editorCanvas"
         :width='editorCanvasWidth'
         :height='editorCanvasHeight'
-        :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: canvasInteractionState.isDraggable, 'resize-left': interactionCursor.sizingDirection.left, 'resize-right': interactionCursor.sizingDirection.right, 'resize-top': interactionCursor.sizingDirection.top, 'resize-bottom': interactionCursor.sizingDirection.bottom, 'top-left-corner': interactionCursor.sizingDirection.left && interactionCursor.sizingDirection.top, 'top-right-corner': interactionCursor.sizingDirection.right && interactionCursor.sizingDirection.top, 'bottom-left-corner': interactionCursor.sizingDirection.left && interactionCursor.sizingDirection.bottom, 'bottom-right-corner': interactionCursor.sizingDirection.right && interactionCursor.sizingDirection.bottom}"
+        :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: canvasInteractionState.isDraggable, 'resize-left': interactionCursor.resizeBorder==BorderSide.Left, 'resize-right': interactionCursor.resizeBorder==BorderSide.Right, 'resize-top': interactionCursor.resizeBorder==BorderSide.Top, 'resize-bottom': interactionCursor.resizeBorder==BorderSide.Bottom, 'top-left-corner': interactionCursor.resizeBorder==BorderSide.TopLeft, 'top-right-corner': interactionCursor.resizeBorder==BorderSide.TopRight, 'bottom-left-corner': interactionCursor.resizeBorder==BorderSide.BottomLeft, 'bottom-right-corner': interactionCursor.resizeBorder==BorderSide.BottomRight}"
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
