@@ -105,6 +105,25 @@ watch(imageData, async (currentFrame) => {
           const convertedImage = imageDataToCanvas(currentFrame.content)
           const detected = await detectObjects(convertedImage)
           console.log('detected: ', detected)
+          const detectedSportsBall = detected
+            .filter(
+              ({ score, label }: { score: number; label: string }) =>
+                label === 'sports ball' && score > 0.9,
+            )
+            .sort((a: { score: number }, b: { score: number }) => b.score - a.score)
+          if (detectedSportsBall[0]?.box) {
+            console.log(
+              'Highest confidence detection',
+              detectedSportsBall[0].box,
+              detectedSportsBall[0],
+            )
+            canvasRenderer.drawOnCanvas(
+              detectedSportsBall[0].box.xmin,
+              detectedSportsBall[0].box.ymin,
+              detectedSportsBall[0].box.xmax,
+              detectedSportsBall[0].box.ymax,
+            )
+          }
         } catch (e) {
           console.error('failed to convert ImageData from currentFrame.content: ', e)
         }

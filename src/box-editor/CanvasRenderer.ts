@@ -4,6 +4,7 @@ export class CanvasRenderer {
   private imageForeground: ImageBitmap | null
   private editorCanvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
+  private selectAreaState: object
 
   private selectionArea = new SelectionArea()
 
