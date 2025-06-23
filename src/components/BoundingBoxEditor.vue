@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, toRaw, onBeforeUnmount } from 'vue'
+import { ref, onMounted, nextTick, watch, toRaw } from 'vue'
 import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
@@ -9,7 +9,7 @@ const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
 const isCanvasReady = ref(false)
-const imageData = ref<{
+const currentFrameData = ref<{
   content: ImageData
   width: number
   height: number
@@ -91,13 +91,13 @@ function imageDataToCanvas(imageData: ImageData) {
   return canvas
 }
 
-watch(imageData, async (currentFrame) => {
+watch(currentFrameData, async (currentFrame) => {
   // watches for frame changes
   if (isCanvasReady.value && currentFrame != null) {
     try {
       const rawContent = toRaw(currentFrame.content)
       const bitImage = await createImageBitmap(rawContent)
-      await canvasRenderer.setVideoFrame(bitImage)
+      await canvasRenderer.setForegroundImage(bitImage)
       canvasRenderer.canvasBackground()
       clearTimeout(detectDelayTimer)
       detectDelayTimer = setTimeout(async () => {
@@ -117,12 +117,8 @@ watch(imageData, async (currentFrame) => {
               detectedSportsBall[0].box,
               detectedSportsBall[0],
             )
-            canvasRenderer.drawOnCanvas(
-              detectedSportsBall[0].box.xmin,
-              detectedSportsBall[0].box.ymin,
-              detectedSportsBall[0].box.xmax,
-              detectedSportsBall[0].box.ymax,
-            )
+            const { xmin, ymin, xmax, ymax } = detectedSportsBall[0].box
+            canvasRenderer.drawOnCanvas(xmin, ymin, xmax, ymax)
           }
         } catch (e) {
           console.error('failed to convert ImageData from currentFrame.content: ', e)
@@ -221,7 +217,7 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   if (isPanning) {
     const currentCoordinates = { x: action.clientX, y: action.clientY }
     const { x, y } = panState.onMove(currentCoordinates)
-    canvasRenderer.panCanvasView({ x, y })
+    canvasRenderer.setCanvasOffset({ x, y })
   } else if (isDraggable) {
     canvasRenderer.updateSelectionPosition(x, y)
   } else if (isResizing) {
@@ -281,7 +277,7 @@ onMounted(() => {
 
   nextTick(() => {
     if (editorCanvas.value) {
-      canvasRenderer = new CanvasRenderer(editorCanvas.value, imageData.value, selectionArea)
+      canvasRenderer = new CanvasRenderer(editorCanvas.value, currentFrameData.value, selectionArea)
       loadDetector()
       isCanvasReady.value = true
       window.requestAnimationFrame(canvasRenderer.canvasBackground)
@@ -290,7 +286,7 @@ onMounted(() => {
 })
 
 const onFrameChange = (e) => {
-  imageData.value = e
+  currentFrameData.value = e
 }
 </script>
 
