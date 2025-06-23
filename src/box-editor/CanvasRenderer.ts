@@ -4,7 +4,6 @@ export class CanvasRenderer {
   private imageForeground: ImageBitmap | null
   private editorCanvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
-  private selectAreaState: object
 
   private selectionArea = new SelectionArea()
 
@@ -60,7 +59,7 @@ export class CanvasRenderer {
     }
   }
 
-  setVideoFrame = async (bitImage: ImageBitmap) => {
+  setForegroundImage = async (bitImage: ImageBitmap) => {
     this.imageForeground = bitImage
   }
 
@@ -89,7 +88,7 @@ export class CanvasRenderer {
     this.drawRect(this.selectionArea)
   }
 
-  panCanvasView = (coordinate: { x: number; y: number }) => {
+  setCanvasOffset = (coordinate: { x: number; y: number }) => {
     const { a } = this.ctx.getTransform()
     this.ctx.setTransform(a, 0, 0, a, coordinate.x, coordinate.y)
 

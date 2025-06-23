@@ -70,11 +70,6 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
 
     const rawImage = imageData instanceof HTMLCanvasElement ? RawImage.fromCanvas : imageData
     const result = await segmentation(rawImage)
-    result.map((r) => ({
-      label: r.label,
-      score: r.score,
-      box: r.box,
-    }))
     return result
   }
 
@@ -90,7 +85,7 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
       })
 
       if (!Array.isArray(detected) || detected.length === 0) {
-        console.warn('fallback to segmentation process — no detections')
+        console.log('fallback to segmentation process — no detections')
         return await this.fallBackSegment(data)
       }
 
