@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, toRaw } from 'vue'
 import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
+import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
-const editorScale = ref(1) //  scale factor for the canvas, used for zooming in and out
 const isCanvasReady = ref(false)
-const currentFrame = ref(null)
+const currentFrameData = ref<{
+  content: ImageData
+  width: number
+  height: number
+} | null>(null)
+const isLoadingDetector = ref(false)
+const isDetectingObjects = ref(false)
 const canvasInteractionState = ref({
   isDrawing: false,
   isDraggable: false,
@@ -56,13 +62,71 @@ const panState = {
 
 const canvasCoordinates = { x: 0, y: 0 }
 const selectionArea = new SelectionArea()
+const objectDetector = new YoloObjectDetector()
+let detectDelayTimer: ReturnType<typeof window.setTimeout>
 let canvasRenderer: CanvasRenderer
 
-watch(currentFrame, async (currentFrame) => {
+objectDetector.addEventListener('loading', ({ detail }) => {
+  isLoadingDetector.value = detail
+})
+objectDetector.addEventListener('detecting', ({ detail }) => {
+  isDetectingObjects.value = detail
+})
+
+const loadDetector = async () => {
+  await objectDetector.load()
+}
+
+const detectObjects = async (imageData) => {
+  return objectDetector.detect(imageData)
+}
+
+function imageDataToCanvas(imageData: ImageData) {
+  const canvas = document.createElement('canvas')
+  canvas.width = imageData.width
+  canvas.height = imageData.height
+
+  const ctx = canvas.getContext('2d')
+  ctx.putImageData(imageData, 0, 0)
+  return canvas
+}
+
+watch(currentFrameData, async (currentFrame) => {
   // watches for frame changes
   if (isCanvasReady.value && currentFrame != null) {
-    await canvasRenderer.setVideoFrame(currentFrame)
-    canvasRenderer.canvasBackground()
+    try {
+      const rawContent = toRaw(currentFrame.content)
+      const bitImage = await createImageBitmap(rawContent)
+      await canvasRenderer.setForegroundImage(bitImage)
+      canvasRenderer.canvasBackground()
+      clearTimeout(detectDelayTimer)
+      detectDelayTimer = setTimeout(async () => {
+        try {
+          const convertedImage = imageDataToCanvas(currentFrame.content)
+          const detected = await detectObjects(convertedImage)
+          console.log('detected: ', detected)
+          const detectedSportsBall = detected
+            .filter(
+              ({ score, label }: { score: number; label: string }) =>
+                label === 'sports ball' && score > 0.9,
+            )
+            .sort((a: { score: number }, b: { score: number }) => b.score - a.score)
+          if (detectedSportsBall[0]?.box) {
+            console.log(
+              'Highest confidence detection',
+              detectedSportsBall[0].box,
+              detectedSportsBall[0],
+            )
+            const { xmin, ymin, xmax, ymax } = detectedSportsBall[0].box
+            canvasRenderer.drawOnCanvas(xmin, ymin, xmax, ymax)
+          }
+        } catch (e) {
+          console.error('failed to convert ImageData from currentFrame.content: ', e)
+        }
+      }, 300)
+    } catch (e) {
+      console.error('failed to create imageBitMap from currentFrame.content: ', e)
+    }
   }
 })
 
@@ -151,11 +215,13 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   let showBorderResize = borderSide
 
   if (isPanning) {
-    canvasRenderer.moveCanvasView(action)
+    const currentCoordinates = { x: action.clientX, y: action.clientY }
+    const { x, y } = panState.onMove(currentCoordinates)
+    canvasRenderer.setCanvasOffset({ x, y })
   } else if (isDraggable) {
-    canvasRenderer.movingRectangle(x, y)
+    canvasRenderer.updateSelectionPosition(x, y)
   } else if (isResizing) {
-    canvasRenderer.resizingRectangle({ x, y }, resizeSide)
+    canvasRenderer.resizeSelectionArea({ x, y }, resizeSide)
   } else if (isDrawing) {
     canvasRenderer.drawOnCanvas(canvasCoordinates.x, canvasCoordinates.y, x, y)
   } else {
@@ -211,13 +277,8 @@ onMounted(() => {
 
   nextTick(() => {
     if (editorCanvas.value) {
-      canvasRenderer = new CanvasRenderer(
-        editorCanvas.value,
-        currentFrame.value,
-        editorScale.value,
-        panState,
-        selectionArea,
-      )
+      canvasRenderer = new CanvasRenderer(editorCanvas.value, currentFrameData.value, selectionArea)
+      loadDetector()
       isCanvasReady.value = true
       window.requestAnimationFrame(canvasRenderer.canvasBackground)
     }
@@ -225,7 +286,7 @@ onMounted(() => {
 })
 
 const onFrameChange = (e) => {
-  currentFrame.value = e.content
+  currentFrameData.value = e
 }
 </script>
 

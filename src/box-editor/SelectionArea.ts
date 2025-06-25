@@ -66,7 +66,7 @@ export class SelectionArea {
     return this.width > 0 && this.height > 0
   }
 
-  whereUserClicked: { x: number; y: number } = { x: 0, y: 0 }
+  userClickOffset: { x: number; y: number } = { x: 0, y: 0 }
 
   constructor(borderSize = 15) {
     this.borderSize = borderSize
@@ -79,8 +79,8 @@ export class SelectionArea {
   }
 
   storeUserClick(coordinate: { x: number; y: number }): void {
-    this.whereUserClicked.x = coordinate.x - this.x
-    this.whereUserClicked.y = coordinate.y - this.y
+    this.userClickOffset.x = coordinate.x - this.x
+    this.userClickOffset.y = coordinate.y - this.y
   }
 
   contains(coordinate: { x: number; y: number }): boolean {
@@ -120,9 +120,9 @@ export class SelectionArea {
   }
 
   detectRegion(coordinate: { x: number; y: number }): AreaRegion {
-    let isInside = false
-    let isOutside = false
-    let borderSide = BorderSide.None
+    const isInside = false
+    const isOutside = false
+    const borderSide = BorderSide.None
 
     const { x, y } = coordinate
     if (
@@ -159,7 +159,7 @@ export class SelectionArea {
   }
 
   move(x: number, y: number): void {
-    this.x = x - this.whereUserClicked.x
-    this.y = y - this.whereUserClicked.y
+    this.x = x - this.userClickOffset.x
+    this.y = y - this.userClickOffset.y
   }
 }
