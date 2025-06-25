@@ -9,7 +9,7 @@ type KeyedDetect = {
 
 const yoloTiny = 'Xenova/yolos-tiny'
 const yoloSmall = 'Xenova/yolos-small'
-
+let segmentation: any | null = null
 const supportedModels = new Set([yoloTiny, yoloSmall])
 
 export class YoloObjectDetector extends EventTarget implements ObjectDetector {
@@ -60,6 +60,19 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
     }
   }
 
+  async fallBackSegment(imageData: HTMLCanvasElement | RawImage | string) {
+    if (!segmentation) {
+      segmentation = await pipeline(
+        'image-segmentation',
+        'Xenova/segformer-b0-finetuned-ade-512-512',
+      )
+    }
+
+    const rawImage = imageData instanceof HTMLCanvasElement ? RawImage.fromCanvas : imageData
+    const result = await segmentation(rawImage)
+    return result
+  }
+
   async detect(imageData: string | HTMLCanvasElement) {
     const detect = this.objectDetector.detect
     if (!detect) {
@@ -70,6 +83,12 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
       const detected = await detect(data, {
         pooling: 'cls', // Use CLS token pooling. Other options: 'mean', 'max'
       })
+
+      if (!Array.isArray(detected) || detected.length === 0) {
+        console.log('fallback to segmentation process — no detections')
+        return await this.fallBackSegment(data)
+      }
+
       return detected
     }
 

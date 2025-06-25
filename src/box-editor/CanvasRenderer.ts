@@ -1,33 +1,25 @@
-import { ref, toRaw } from 'vue'
 import { SelectionArea } from '../box-editor/SelectionArea'
 
 export class CanvasRenderer {
-  private currentFrame = ref()
-  private editorCanvas = ref()
-  private editorScale = ref()
-  private interactionCursor = ref()
+  private imageForeground: ImageBitmap | null
+  private editorCanvas: HTMLCanvasElement
+  private ctx: CanvasRenderingContext2D
 
-  private panState
   private selectionArea = new SelectionArea()
 
   constructor(
     editorCanvas: HTMLCanvasElement,
-    currentFrame: null,
-    editorScale: number,
-    panState,
+    imageForeground: ImageBitmap | null,
     selectionArea: SelectionArea,
-    interactionCursor: object,
   ) {
-    this.editorCanvas.value = editorCanvas
-    this.currentFrame.value = currentFrame
-    this.editorScale.value = editorScale
-    this.panState = panState
+    this.editorCanvas = editorCanvas
+    this.ctx = editorCanvas.getContext('2d')!
+    this.imageForeground = imageForeground
     this.selectionArea = selectionArea
-    this.interactionCursor.value = interactionCursor
   }
 
-  private drawCheckerboard(canvas, { startX, startY, width, height, lightColor, darkColor }) {
-    const ctx = canvas.getContext('2d')
+  private drawCheckerboard({ startX, startY, width, height, lightColor, darkColor }) {
+    const ctx = this.ctx
     const x0 = Math.round(startX * 0.1) * 10
     const y0 = Math.round(startY * 0.1) * 10
     for (let i = 0; i <= height / 10; i++) {
@@ -41,9 +33,8 @@ export class CanvasRenderer {
   }
 
   canvasBackground = () => {
-    const canvas = this.editorCanvas.value
-    const ctx = canvas.getContext('2d')
-    const { a, e, f } = ctx.getTransform()
+    const canvas = this.editorCanvas
+    const { a, e, f } = this.ctx.getTransform()
 
     const inverseScale = a > 0 ? 1 / a : 1
     const canvasWidth = canvas.width
@@ -53,33 +44,27 @@ export class CanvasRenderer {
     const startX = -e * inverseScale
     const startY = -f * inverseScale
 
-    ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
+    this.ctx.clearRect(startX, startY, scaledWidth, scaledHeight)
 
-    this.drawCheckerboard(canvas, {
-        startX,
-        startY,
-        width: scaledWidth,
-        height: scaledHeight,
-        lightColor: 'rgba(255, 255, 255, 0.80)',
-        darkColor: 'rgba(0, 0, 0, 0.05)',
-      })
-    if (this.currentFrame.value != null) {
-      ctx.drawImage(this.currentFrame.value, 0, 0)
+    this.drawCheckerboard({
+      startX,
+      startY,
+      width: scaledWidth,
+      height: scaledHeight,
+      lightColor: 'rgba(255, 255, 255, 0.80)',
+      darkColor: 'rgba(0, 0, 0, 0.05)',
+    })
+    if (this.imageForeground != null) {
+      this.ctx.drawImage(this.imageForeground, 0, 0)
     }
   }
 
-  setVideoFrame = async (videoFrame: any) =>{
-    const rawContent = toRaw(videoFrame)
-    try{
-      this.currentFrame.value = await createImageBitmap(rawContent)
-    }catch(e){
-      console.error("failed to create imageBitMap from frame.content: ", e)
-    }
+  setForegroundImage = async (bitImage: ImageBitmap) => {
+    this.imageForeground = bitImage
   }
 
   zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
-    const canvas = this.editorCanvas.value
-    const ctx = canvas.getContext('2d')
+    const ctx = this.ctx
 
     const xform = ctx.getTransform()
 
@@ -97,31 +82,22 @@ export class CanvasRenderer {
       .translate(-x, -y)
       .multiply(xform)
 
-    this.editorScale = newScale
-
     ctx.setTransform(updatedXform)
 
     this.canvasBackground() // redraws the background
-    this.paintIt(this.selectionArea)
+    this.drawRect(this.selectionArea)
   }
 
-  moveCanvasView = (action: MouseEvent) => {
-    const currentCoordinates = { x: action.clientX, y: action.clientY }
-    const { x, y } = this.panState.onMove(currentCoordinates)
-    const ctx = this.editorCanvas.value.getContext('2d')
-    const { a } = ctx.getTransform()
-    ctx.setTransform(a, 0, 0, a, x, y)
+  setCanvasOffset = (coordinate: { x: number; y: number }) => {
+    const { a } = this.ctx.getTransform()
+    this.ctx.setTransform(a, 0, 0, a, coordinate.x, coordinate.y)
 
     this.canvasBackground()
-    this.paintIt(this.selectionArea)
+    this.drawRect(this.selectionArea)
   }
 
   drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
-    const canvas = this.editorCanvas.value
-    const ctx = canvas.getContext('2d')
-
     this.canvasBackground()
-    this.interactionCursor.value.crosshair = true
 
     const startX = Math.min(x1, x2)
     const startY = Math.min(y1, y2)
@@ -133,74 +109,73 @@ export class CanvasRenderer {
     this.selectionArea.width = width
     this.selectionArea.height = height
 
-    this.paintIt(this.selectionArea)
+    this.drawRect(this.selectionArea)
   }
 
   // function to move the rectangle
-  movingRectangle = (x: number, y: number) => {
-    const Canvas = this.editorCanvas.value
-    const ctx = Canvas.getContext('2d')
-
+  updateSelectionPosition = (x: number, y: number) => {
     this.canvasBackground()
 
     this.selectionArea.move(x, y)
 
-    this.paintIt(this.selectionArea)
+    this.drawRect(this.selectionArea)
   }
 
-  // model function to resize the rectangle
-  resizingRectangle = (x: number, y: number) => {
-    const canvas = this.editorCanvas.value
-    const ctx = canvas.getContext('2d')
+  resizeSelectionArea = (
+    coordinate: { x: number; y: number },
+    isResizing: {
+      isTop: boolean
+      isRight: boolean
+      isBottom: boolean
+      isLeft: boolean
+    },
+  ) => {
+    const { x, y } = coordinate
 
     this.canvasBackground()
 
-    // Handle each side resizing
-    if (this.interactionCursor.value.sizingDirection.left) {
+    const { isTop, isRight, isBottom, isLeft } = isResizing
+    if (isLeft) {
       const newWidth = this.selectionArea.x + this.selectionArea.width - x
-      if (newWidth >= this.selectionArea.outerLayer) {
+      if (newWidth >= this.selectionArea.borderSize) {
         this.selectionArea.x = x
         this.selectionArea.width = newWidth
       }
     }
-    if (this.interactionCursor.value.sizingDirection.right) {
+    if (isRight) {
       const newWidth = x - this.selectionArea.x
-      if (newWidth >= this.selectionArea.outerLayer) {
+      if (newWidth >= this.selectionArea.borderSize) {
         this.selectionArea.width = newWidth
       }
     }
-    if (this.interactionCursor.value.sizingDirection.top) {
+    if (isTop) {
       const newHeight = this.selectionArea.y + this.selectionArea.height - y
-      if (newHeight >= this.selectionArea.outerLayer) {
+      if (newHeight >= this.selectionArea.borderSize) {
         this.selectionArea.y = y
         this.selectionArea.height = newHeight
       }
     }
-    if (this.interactionCursor.value.sizingDirection.bottom) {
+    if (isBottom) {
       const newHeight = y - this.selectionArea.y
-      if (newHeight >= this.selectionArea.outerLayer) {
+      if (newHeight >= this.selectionArea.borderSize) {
         this.selectionArea.height = newHeight
       }
     }
 
-    this.paintIt(this.selectionArea)
+    this.drawRect(this.selectionArea)
   }
 
-  // view function for user to see the rectangle
-  paintIt = (area: { x: number; y: number; width: number; height: number }) => {
-    const canvas = this.editorCanvas.value
-    const ctx = canvas.getContext('2d')
+  drawRect = (rectangle: { x: number; y: number; width: number; height: number }) => {
+    const ctx = this.ctx
     ctx.beginPath()
     ctx.fillStyle = 'rgba(255, 0, 0, 0.05)'
-    ctx.fillRect(area.x, area.y, area.width, area.height)
+    ctx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
   }
 
-  getMousePositionOnCanvas(action: MouseEvent) {
-    const canvas = this.editorCanvas.value
-    const ctx = canvas.getContext('2d')
+  getCanvasCoordinates(viewCoordinates: { x: number; y: number }) {
+    const ctx = this.ctx
 
-    const x = action.offsetX
-    const y = action.offsetY
+    const { x, y } = viewCoordinates
 
     const transform = ctx.getTransform()
     const transformedPoint = new DOMPoint(x, y).matrixTransform(transform.inverse())

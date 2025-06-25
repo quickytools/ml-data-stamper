@@ -21,8 +21,8 @@ const emit = defineEmits<{
   /**
    * On video data load and frame change the frame content, frame width, and frame height is emitted.
    */
-  frameChange: [content: any, width: number, height: number],
-  }>()
+  frameChange: [content: any, width: number, height: number]
+}>()
 
 const sourceVideoRepository = inject('source-video-repository')
 
@@ -31,7 +31,6 @@ const videoCanvas = ref()
 const videoCanvasWidth = ref(0)
 const videoCanvasHeight = ref(0)
 const sliderFrameIndex = ref(0)
-
 
 const videoSrc = ref('')
 
@@ -82,15 +81,15 @@ const seekVideoData = useObservable(
 const loadFrame = (index, frames) => {
   if (frames && index >= 0 && index < frames.length) {
     const frame = frames[index]
-    if(props.isEventEmitter){
+    if (props.isEventEmitter) {
       emit('frameChange', {
         content: frame.content,
         width: videoCanvasWidth.value,
-        height: videoCanvasHeight.value
+        height: videoCanvasHeight.value,
       })
-    }else{
-    const ctx = videoCanvas.value.getContext('2d')
-    ctx.putImageData(frame.content, 0, 0)
+    } else {
+      const ctx = videoCanvas.value.getContext('2d')
+      ctx.putImageData(frame.content, 0, 0)
     }
   }
 }
@@ -98,7 +97,7 @@ const loadFrame = (index, frames) => {
 watch(seekVideoData, (value, prev) => {
   const { width, height, frames, orientation } = value
 
-  if(!props.isEventEmitter){
+  if (!props.isEventEmitter) {
     const canvas = videoCanvas.value
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -150,12 +149,12 @@ const onFileChange = (e) => {
 
 onMounted(() => {
   // TODO Demonstrates object detection on URL image. Delete once detection on video frames is complete.
-  // loadDetector().then(async () => {
-  //   const tennisImage =
-  //     'https://static.nike.com/a/images/f_auto/dpr_3.0,cs_srgb/h_484,c_limit/193ecef7-04df-45a4-a9aa-0643cf7ba4be/how-to-teach-the-tennis-serve-to-adults.jpg'
-  //   const detected = await detectObjects(tennisImage)
-  //   console.log('detected', detected)
-  // })
+  loadDetector().then(async () => {
+    const tennisImage =
+      'https://static.nike.com/a/images/f_auto/dpr_3.0,cs_srgb/h_484,c_limit/193ecef7-04df-45a4-a9aa-0643cf7ba4be/how-to-teach-the-tennis-serve-to-adults.jpg'
+    const detected = await detectObjects(tennisImage)
+    console.log('detected', detected)
+  })
 })
 </script>
 
