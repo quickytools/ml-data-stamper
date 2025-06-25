@@ -41,10 +41,10 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
       throw new Error(`${key} model is not supported. Select any of ${supportedModels}`)
     }
 
-    try {
+    if (this.objectDetector.key != key) {
       console.time('load-detector')
       this.isLoading = true
-      if (this.objectDetector.key != key) {
+      try {
         const detect = await pipeline('object-detection', key, {
           dtype: 'q8',
           device: 'webgpu',
@@ -53,10 +53,10 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
           key: key,
           detect,
         }
+      } finally {
+        console.timeEnd('load-detector')
+        this.isLoading = false
       }
-    } finally {
-      console.timeEnd('load-detector')
-      this.isLoading = false
     }
   }
 
@@ -97,10 +97,10 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
       this.isDetecting = true
 
       if (typeof imageData === 'string') {
-        return detectObjectsInImage(imageData)
+        return await detectObjectsInImage(imageData)
       } else if (imageData instanceof HTMLCanvasElement) {
         const rawImage = RawImage.fromCanvas(imageData)
-        return detectObjectsInImage(rawImage)
+        return await detectObjectsInImage(rawImage)
       } else {
         throw new Error(`${typeof imageData} is not yet supported for object detection`)
       }
