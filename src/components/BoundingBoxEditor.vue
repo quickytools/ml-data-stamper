@@ -66,6 +66,9 @@ const objectDetector = new YoloObjectDetector()
 let detectDelayTimer: ReturnType<typeof window.setTimeout>
 let canvasRenderer: CanvasRenderer
 
+let isMouseOverCanvas = false
+let isSpacedPressedOverCanvas = false
+
 objectDetector.addEventListener('loading', ({ detail }) => {
   isLoadingDetector.value = detail
 })
@@ -133,6 +136,19 @@ watch(currentFrameData, async (currentFrame) => {
 const getCanvasCoordinates = (action: MouseEvent) =>
   canvasRenderer.getCanvasCoordinates({ x: action.offsetX, y: action.offsetY })
 
+const updateMouseState = (e) => {
+  if (e.target == editorCanvas.value) {
+    switch (e.type) {
+      case 'mouseenter':
+        isMouseOverCanvas = true
+        break
+      case 'mouseleave':
+        isMouseOverCanvas = false
+        break
+    }
+  }
+}
+
 const mouseDownOnCanvas = (action: MouseEvent) => {
   const { x, y } = getCanvasCoordinates(action)
   canvasCoordinates.x = x
@@ -140,7 +156,7 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
 
   const interactionState = canvasInteractionState.value
   const isLeftMouseButton = action.button === 0
-  if ((isLeftMouseButton && action.ctrlKey) || action.button === 1) {
+  if ((isLeftMouseButton && (action.ctrlKey || isSpacedPressedOverCanvas)) || action.button === 1) {
     canvasInteractionState.value = {
       ...interactionState,
       isPanning: true,
@@ -243,44 +259,65 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   }
 }
 
-const mouseOutOnCanvas = (e) => {
+const mouseEnterOnCanvas = (action) => {
+  updateMouseState(action)
+}
+
+const mouseLeaveOnCanvas = (action) => {
+  updateMouseState(action)
+
   const { isPanning, isResizing, isDragging, isDrawing } = canvasInteractionState.value
   if (isPanning) {
     canvasInteractionState.value.isPanning = false
   }
   // TODO Only if mouse up while off canvas
   else if (isResizing || isDragging || isDrawing) {
-    mouseMoveOnCanvas(e)
-    mouseUpOnCanvas(e)
+    mouseMoveOnCanvas(action)
+    mouseUpOnCanvas(action)
   }
 }
 
-const keyUpOnCanvas = (keyCode) => {
-  switch (keyCode) {
-    case 'KeyF':
-      const canvas = editorCanvas.value
-      const ctx = canvas.getContext('2d')
-      if (selectionArea.isDefined) {
-        const xform = ctx.getTransform()
-        ctx.setTransform(selectionArea.getBoundingTransform(xform))
-      } else {
-        ctx.setTransform(new DOMMatrix())
-      }
-      canvasRenderer.canvasBackground()
-      canvasRenderer.drawRect(selectionArea)
-      break
-  }
-}
-
-const keyOnCanvas = (e: MouseEvent) => {
+const onKeyOverCanvas = (e) => {
+  const keyCode = e.code
   switch (e.type) {
-    case 'keyup':
-      keyUpOnCanvas(e.code)
+    case 'keydown':
+      switch (keyCode) {
+        case 'KeyF':
+          const canvas = editorCanvas.value
+          const ctx = canvas.getContext('2d')
+          if (selectionArea.isDefined) {
+            const xform = ctx.getTransform()
+            ctx.setTransform(selectionArea.getBoundingTransform(xform))
+          } else {
+            ctx.setTransform(new DOMMatrix())
+          }
+          canvasRenderer.canvasBackground()
+          canvasRenderer.drawRect(selectionArea)
+          return true
+
+        case 'Space':
+          isSpacedPressedOverCanvas = true
+          return true
+      }
       break
+  }
+
+  return false
+}
+
+// TODO Keymapping
+const onKeyEvent = (e: MouseEvent) => {
+  if (isMouseOverCanvas && onKeyOverCanvas(e)) {
+    e.stopPropagation()
+    e.preventDefault()
+  }
+  if (e.type == 'keyup' && e.code == 'Space') {
+    isSpacedPressedOverCanvas = false
   }
 }
 
-document.addEventListener('keyup', keyOnCanvas)
+document.addEventListener('keyup', onKeyEvent)
+document.addEventListener('keydown', onKeyEvent)
 
 onMounted(() => {
   const canvasWidth = 600
@@ -321,7 +358,8 @@ div
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
-        @mouseout="mouseOutOnCanvas"
+        @mouseenter="mouseEnterOnCanvas"
+        @mouseleave="mouseLeaveOnCanvas"
         @wheel="mouseWheelOnCanvas"
     )
     p Use mouse wheel to zoom. Use Ctrl + left mouse click to move around the canvas after zooming or middle mouse click.
