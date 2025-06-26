@@ -5,6 +5,8 @@ import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
+const videoController = ref()
+
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
@@ -278,9 +280,9 @@ const mouseLeaveOnCanvas = (action) => {
 }
 
 const onKeyOverCanvas = (e) => {
-  const keyCode = e.code
   switch (e.type) {
     case 'keydown':
+      const keyCode = e.code
       switch (keyCode) {
         case 'KeyF':
           const canvas = editorCanvas.value
@@ -297,6 +299,10 @@ const onKeyOverCanvas = (e) => {
 
         case 'Space':
           isSpacedPressedOverCanvas = true
+          return true
+        case 'ArrowLeft':
+        case 'ArrowRight':
+          onScrubFrame(keyCode == 'ArrowLeft' ? -1 : 1)
           return true
       }
       break
@@ -341,6 +347,10 @@ onMounted(() => {
   })
 })
 
+const onScrubFrame = (delta) => {
+  videoController.value.changeFrame(delta)
+}
+
 const onFrameChange = (e) => {
   currentFrameData.value = e
 }
@@ -349,7 +359,7 @@ const onFrameChange = (e) => {
 <template lang="pug">
 div
     p Bounding box editor
-    LoadVideo(:isEventEmitter="true" @frameChange='onFrameChange')
+    LoadVideo(ref="videoController" :isEventEmitter="true" @frameChange='onFrameChange')
     canvas(
         ref="editorCanvas"
         :width='editorCanvasWidth'

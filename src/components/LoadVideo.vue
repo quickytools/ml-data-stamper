@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { useTemplateRef, ref, watch, inject, onMounted, defineProps, defineEmits } from 'vue'
+import {
+  useTemplateRef,
+  ref,
+  watch,
+  inject,
+  onMounted,
+  defineProps,
+  defineEmits,
+  defineExpose,
+} from 'vue'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
@@ -172,6 +181,17 @@ onMounted(() => {
   // TODO Demonstrates object detection on URL image. Delete once detection on video frames is complete.
   // sampleDetection()
 })
+
+const changeFrame = (delta) => {
+  if (delta) {
+    sliderFrameIndex.value = Math.max(
+      0,
+      Math.min(videoFrames.value.length, sliderFrameIndex.value + delta),
+    )
+  }
+}
+
+defineExpose({ changeFrame })
 </script>
 
 <template lang="pug">
