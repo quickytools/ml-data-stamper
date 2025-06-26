@@ -242,6 +242,12 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
   }
 }
 
+const mouseOutOnCanvas = (e) => {
+  if (canvasInteractionState.value.isPanning) {
+    canvasInteractionState.value.isPanning = false
+  }
+}
+
 const keyUpOnCanvas = (keyCode) => {
   switch (keyCode) {
     case 'KeyF':
@@ -302,6 +308,7 @@ div
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
+        @mouseout="mouseOutOnCanvas"
         @wheel="mouseWheelOnCanvas"
     )
     p Use mouse wheel to zoom. Use Ctrl + left mouse click to move around the canvas after zooming or middle mouse click.
