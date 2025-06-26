@@ -18,7 +18,7 @@ const isLoadingDetector = ref(false)
 const isDetectingObjects = ref(false)
 const canvasInteractionState = ref({
   isDrawing: false,
-  isDraggable: false,
+  isDragging: false,
   isResizing: false,
   resizeSide: {
     isTop: false,
@@ -139,7 +139,8 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
   canvasCoordinates.y = y
 
   const interactionState = canvasInteractionState.value
-  if ((action.button === 0 && action.ctrlKey) || action.button === 1) {
+  const isLeftMouseButton = action.button === 0
+  if ((isLeftMouseButton && action.ctrlKey) || action.button === 1) {
     canvasInteractionState.value = {
       ...interactionState,
       isPanning: true,
@@ -156,7 +157,7 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
 
       canvasInteractionState.value = {
         ...interactionState,
-        isDraggable: true,
+        isDragging: true,
       }
     } else if (borderSide != BorderSide.None) {
       canvasInteractionState.value = {
@@ -169,7 +170,7 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
           isLeft: leftBorderSides.has(borderSide),
         },
       }
-    } else {
+    } else if (isLeftMouseButton) {
       canvasInteractionState.value = {
         ...interactionState,
         isDrawing: true,
@@ -195,7 +196,7 @@ const mouseWheelOnCanvas = (action: WheelEvent) => {
 const mouseUpOnCanvas = () => {
   canvasInteractionState.value = {
     isDrawing: false,
-    isDraggable: false,
+    isDragging: false,
     isResizing: false,
     isPanning: false,
   }
@@ -205,10 +206,10 @@ const mouseUpOnCanvas = () => {
 const mouseMoveOnCanvas = (action: MouseEvent) => {
   const { x, y } = getCanvasCoordinates(action)
 
-  const { isPanning, isDraggable, isResizing, isDrawing, resizeSide } = canvasInteractionState.value
+  const { isPanning, isDragging, isResizing, isDrawing, resizeSide } = canvasInteractionState.value
 
   const borderSide = interactionCursor.value.resizeBorder
-  const isHovering = !(isDraggable || isResizing || isDrawing)
+  const isHovering = !(isDragging || isResizing || isDrawing)
 
   let showHover = isHovering
   let showCrosshair = isDrawing
@@ -218,7 +219,7 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
     const currentCoordinates = { x: action.clientX, y: action.clientY }
     const { x, y } = panState.onMove(currentCoordinates)
     canvasRenderer.setCanvasOffset({ x, y })
-  } else if (isDraggable) {
+  } else if (isDragging) {
     canvasRenderer.updateSelectionPosition(x, y)
   } else if (isResizing) {
     canvasRenderer.resizeSelectionArea({ x, y }, resizeSide)
@@ -282,8 +283,14 @@ onMounted(() => {
   editorCanvasHeight.value = canvasHeight
 
   nextTick(() => {
-    if (editorCanvas.value) {
-      canvasRenderer = new CanvasRenderer(editorCanvas.value, currentFrameData.value, selectionArea)
+    const canvas = editorCanvas.value
+    if (canvas) {
+      canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault()
+        return false
+      })
+
+      canvasRenderer = new CanvasRenderer(canvas, currentFrameData.value, selectionArea)
       loadDetector()
       isCanvasReady.value = true
       window.requestAnimationFrame(canvasRenderer.canvasBackground)
@@ -304,7 +311,7 @@ div
         ref="editorCanvas"
         :width='editorCanvasWidth'
         :height='editorCanvasHeight'
-        :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: canvasInteractionState.isDraggable, 'resize-left': interactionCursor.resizeBorder==BorderSide.Left, 'resize-right': interactionCursor.resizeBorder==BorderSide.Right, 'resize-top': interactionCursor.resizeBorder==BorderSide.Top, 'resize-bottom': interactionCursor.resizeBorder==BorderSide.Bottom, 'top-left-corner': interactionCursor.resizeBorder==BorderSide.TopLeft, 'top-right-corner': interactionCursor.resizeBorder==BorderSide.TopRight, 'bottom-left-corner': interactionCursor.resizeBorder==BorderSide.BottomLeft, 'bottom-right-corner': interactionCursor.resizeBorder==BorderSide.BottomRight}"
+        :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: canvasInteractionState.isDragging, 'resize-left': interactionCursor.resizeBorder==BorderSide.Left, 'resize-right': interactionCursor.resizeBorder==BorderSide.Right, 'resize-top': interactionCursor.resizeBorder==BorderSide.Top, 'resize-bottom': interactionCursor.resizeBorder==BorderSide.Bottom, 'top-left-corner': interactionCursor.resizeBorder==BorderSide.TopLeft, 'top-right-corner': interactionCursor.resizeBorder==BorderSide.TopRight, 'bottom-left-corner': interactionCursor.resizeBorder==BorderSide.BottomLeft, 'bottom-right-corner': interactionCursor.resizeBorder==BorderSide.BottomRight}"
         @mousedown="mouseDownOnCanvas"
         @mousemove="mouseMoveOnCanvas"
         @mouseup="mouseUpOnCanvas"
