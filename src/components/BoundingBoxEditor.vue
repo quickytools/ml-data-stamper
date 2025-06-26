@@ -193,7 +193,7 @@ const mouseWheelOnCanvas = (action: WheelEvent) => {
   canvasRenderer.zoom({ x: action.offsetX, y: action.offsetY }, action.deltaY)
 }
 
-const mouseUpOnCanvas = () => {
+const mouseUpOnCanvas = (e) => {
   canvasInteractionState.value = {
     isDrawing: false,
     isDragging: false,
@@ -244,8 +244,14 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
 }
 
 const mouseOutOnCanvas = (e) => {
-  if (canvasInteractionState.value.isPanning) {
+  const { isPanning, isResizing, isDragging, isDrawing } = canvasInteractionState.value
+  if (isPanning) {
     canvasInteractionState.value.isPanning = false
+  }
+  // TODO Only if mouse up while off canvas
+  else if (isResizing || isDragging || isDrawing) {
+    mouseMoveOnCanvas(e)
+    mouseUpOnCanvas(e)
   }
 }
 
