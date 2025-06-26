@@ -71,7 +71,7 @@ export class CanvasRenderer {
     const prevScale = xform.a
 
     let newScale = prevScale + deltaY * -0.01 // Adjust the zoom speed as needed
-    newScale = Math.min(Math.max(0.3, newScale), 10)
+    newScale = Math.min(Math.max(0.5, newScale), 10)
 
     const scaleChange = newScale / prevScale
 
