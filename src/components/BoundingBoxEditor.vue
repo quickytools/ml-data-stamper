@@ -5,7 +5,7 @@ import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import LoadVideo from './LoadVideo.vue'
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
-const videoController = ref()
+const canvasContainer = ref()
 
 const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
@@ -322,14 +322,14 @@ const onKeyEvent = (e: MouseEvent) => {
   }
 }
 
+// TODO Add in mount, remove in unmount or refactor
 document.addEventListener('keyup', onKeyEvent)
 document.addEventListener('keydown', onKeyEvent)
 
 onMounted(() => {
-  const canvasWidth = 600
-  const canvasHeight = 400
-  editorCanvasWidth.value = canvasWidth
-  editorCanvasHeight.value = canvasHeight
+  const container = canvasContainer.value
+  editorCanvasWidth.value = container.clientWidth
+  editorCanvasHeight.value = container.clientHeight
 
   nextTick(() => {
     const canvas = editorCanvas.value
@@ -348,7 +348,8 @@ onMounted(() => {
 })
 
 const onScrubFrame = (delta) => {
-  videoController.value.changeFrame(delta)
+  // TODO Emit event
+  // videoController.value.changeFrame(delta)
 }
 
 const onFrameChange = (e) => {
@@ -357,25 +358,25 @@ const onFrameChange = (e) => {
 </script>
 
 <template lang="pug">
-div
-    p Bounding box editor
-    LoadVideo(ref="videoController" :isEventEmitter="true" @frameChange='onFrameChange')
-    canvas(
-        ref="editorCanvas"
-        :width='editorCanvasWidth'
-        :height='editorCanvasHeight'
-        :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: canvasInteractionState.isDragging, 'resize-left': interactionCursor.resizeBorder==BorderSide.Left, 'resize-right': interactionCursor.resizeBorder==BorderSide.Right, 'resize-top': interactionCursor.resizeBorder==BorderSide.Top, 'resize-bottom': interactionCursor.resizeBorder==BorderSide.Bottom, 'top-left-corner': interactionCursor.resizeBorder==BorderSide.TopLeft, 'top-right-corner': interactionCursor.resizeBorder==BorderSide.TopRight, 'bottom-left-corner': interactionCursor.resizeBorder==BorderSide.BottomLeft, 'bottom-right-corner': interactionCursor.resizeBorder==BorderSide.BottomRight}"
-        @mousedown="mouseDownOnCanvas"
-        @mousemove="mouseMoveOnCanvas"
-        @mouseup="mouseUpOnCanvas"
-        @mouseenter="mouseEnterOnCanvas"
-        @mouseleave="mouseLeaveOnCanvas"
-        @wheel="mouseWheelOnCanvas"
-    )
-    p Use mouse wheel to zoom. Use Ctrl + left mouse click to move around the canvas after zooming or middle mouse click.
+div.fill-space(ref="canvasContainer")
+  canvas(ref="editorCanvas"
+         :width='editorCanvasWidth'
+         :height='editorCanvasHeight'
+         :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: canvasInteractionState.isDragging, 'resize-left': interactionCursor.resizeBorder==BorderSide.Left, 'resize-right': interactionCursor.resizeBorder==BorderSide.Right, 'resize-top': interactionCursor.resizeBorder==BorderSide.Top, 'resize-bottom': interactionCursor.resizeBorder==BorderSide.Bottom, 'top-left-corner': interactionCursor.resizeBorder==BorderSide.TopLeft, 'top-right-corner': interactionCursor.resizeBorder==BorderSide.TopRight, 'bottom-left-corner': interactionCursor.resizeBorder==BorderSide.BottomLeft, 'bottom-right-corner': interactionCursor.resizeBorder==BorderSide.BottomRight}"
+         @mousedown="mouseDownOnCanvas"
+         @mousemove="mouseMoveOnCanvas"
+         @mouseup="mouseUpOnCanvas"
+         @mouseenter="mouseEnterOnCanvas"
+         @mouseleave="mouseLeaveOnCanvas"
+         @wheel="mouseWheelOnCanvas"
+  )
 </template>
 
 <style scoped>
+.fill-space {
+  height: 100vh;
+  width: 100vw;
+}
 canvas {
   cursor: crosshair;
 }

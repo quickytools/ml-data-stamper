@@ -21,6 +21,8 @@
     "@vueuse/rxjs": "^13.1.0",
     "drizzle-orm": "^0.43.1",
     "joi": "^17.13.3",
+    "lodash.debounce": "^4.0.8",
+    "lodash.throttle": "^4.1.1",
     "mediainfo.js": "^0.3.5",
     "pinia": "^3.0.3",
     "quasar": "^2.18.1",
