@@ -1,4 +1,4 @@
-import type { CanvasRenderable } from './CanvasRenderable'
+import type { CanvasRenderable } from '@/types/CanvasRenderable'
 
 export class CanvasRenderer {
   private readonly ctx: CanvasRenderingContext2D
@@ -7,7 +7,7 @@ export class CanvasRenderer {
 
   constructor(
     private readonly editorCanvas: HTMLCanvasElement,
-    private foregroundImage: ImageBitmap | null,
+    private foregroundImage: ImageData | null,
     private readonly renderables: Array<CanvasRenderable> = [],
   ) {
     this.ctx = editorCanvas.getContext('2d')!
@@ -65,7 +65,7 @@ export class CanvasRenderer {
     })
 
     if (this.foregroundImage) {
-      this.ctx.drawImage(this.foregroundImage, 0, 0)
+      this.ctx.putImageData(this.foregroundImage, 0, 0)
     }
 
     // TODO Order of operations
@@ -74,7 +74,7 @@ export class CanvasRenderer {
     }
   }
 
-  setForegroundImage = async (image: ImageBitmap) => {
+  setForegroundImage = async (image: ImageData) => {
     this.foregroundImage = image
     this.redraw()
   }

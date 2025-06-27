@@ -1,5 +1,5 @@
-import type { CanvasRenderable } from './CanvasRenderable'
-import type { RectangleSide } from './RectangleInteractionState'
+import type { CanvasRenderable } from '../types/CanvasRenderable'
+import type { RectangleSide } from '@/types/RectangleInteractionState'
 
 export enum BorderSide {
   None = 0,
@@ -33,35 +33,35 @@ export class SelectionArea implements CanvasRenderable {
     this._borderSize = Math.max(value, 1)
   }
 
-  get xMin() {
+  private get xMin() {
     return this.x
   }
 
-  get xMax() {
+  private get xMax() {
     return this.x + this.width
   }
 
-  get yMin() {
+  private get yMin() {
     return this.y
   }
 
-  get yMax() {
+  private get yMax() {
     return this.y + this.height
   }
 
-  get horizontalBorderMin() {
+  private get horizontalBorderMin() {
     return this.xMin - this.borderSize
   }
 
-  get horizontalBorderMax() {
+  private get horizontalBorderMax() {
     return this.xMax + this.borderSize
   }
 
-  get verticalBorderMin() {
+  private get verticalBorderMin() {
     return this.yMin - this.borderSize
   }
 
-  get verticalBorderMax() {
+  private get verticalBorderMax() {
     return this.yMax + this.borderSize
   }
 
@@ -181,42 +181,38 @@ export class SelectionArea implements CanvasRenderable {
     this.y = coordinate.y + this.translateOffset.y
   }
 
-  onResize = (
-    coordinate: { x: number; y: number },
-    // TODO Update type
-    isResizing: {
-      isTop: boolean
-      isRight: boolean
-      isBottom: boolean
-      isLeft: boolean
-    },
-  ) => {
+  onResize = (coordinate: { x: number; y: number }, isResizing: RectangleSide) => {
     const { x, y } = coordinate
 
-    const { isTop, isRight, isBottom, isLeft } = isResizing
+    const { top, right, bottom, left } = isResizing
+
+    // TODO Allow resize across opposite side(s) pinning side(s) not being dragged
     const minSize = 0
 
-    if (isLeft) {
+    if (left) {
       const newWidth = this.xMax - x
       if (newWidth >= minSize) {
         this.x = x
         this.width = newWidth
       }
     }
-    if (isRight) {
+
+    if (right) {
       const newWidth = x - this.xMin
       if (newWidth >= minSize) {
         this.width = newWidth
       }
     }
-    if (isTop) {
+
+    if (top) {
       const newHeight = this.yMax - y
       if (newHeight >= minSize) {
         this.y = y
         this.height = newHeight
       }
     }
-    if (isBottom) {
+
+    if (bottom) {
       const newHeight = y - this.yMin
       if (newHeight >= minSize) {
         this.height = newHeight
