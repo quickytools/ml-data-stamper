@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch, toRaw } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 
 import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 
@@ -25,8 +25,10 @@ const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
 const isCanvasReady = ref(false)
+
 const isLoadingDetector = ref(false)
 const isDetectingObjects = ref(false)
+
 const canvasInteractionState = ref({
   isDrawing: false,
   isDragging: false,
@@ -71,7 +73,6 @@ const panState = {
   },
 }
 
-const canvasCoordinates = { x: 0, y: 0 }
 const selectionArea = new SelectionArea()
 const objectDetector = new YoloObjectDetector()
 let detectDelayTimer: ReturnType<typeof window.setTimeout>
@@ -108,13 +109,11 @@ function imageDataToCanvas(imageData: ImageData) {
 watch(
   () => props.imageContent,
   async (currentFrame) => {
-    // watches for frame changes
     if (isCanvasReady.value && currentFrame != null) {
       try {
-        const rawContent = toRaw(currentFrame.content)
-        const bitImage = await createImageBitmap(rawContent)
-        await canvasRenderer.setForegroundImage(bitImage)
-        canvasRenderer.canvasBackground()
+        const frameImage = await createImageBitmap(currentFrame.content)
+        canvasRenderer.setForegroundImage(frameImage)
+
         clearTimeout(detectDelayTimer)
         detectDelayTimer = setTimeout(async () => {
           try {
@@ -134,7 +133,8 @@ watch(
                 detectedSportsBall[0],
               )
               const { xmin, ymin, xmax, ymax } = detectedSportsBall[0].box
-              canvasRenderer.drawOnCanvas(xmin, ymin, xmax, ymax)
+              selectionArea.update({ x: xmin, y: ymin }, { x: xmax, y: ymax })
+              canvasRenderer.redraw()
             }
           } catch (e) {
             console.error('failed to convert ImageData from currentFrame.content: ', e)
@@ -164,9 +164,7 @@ const updateMouseState = (e) => {
 }
 
 const mouseDownOnCanvas = (action: MouseEvent) => {
-  const { x, y } = getCanvasCoordinates(action)
-  canvasCoordinates.x = x
-  canvasCoordinates.y = y
+  const coordinate = getCanvasCoordinates(action)
 
   const interactionState = canvasInteractionState.value
   const isLeftMouseButton = action.button === 0
@@ -178,17 +176,17 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
     const { e, f } = editorCanvas.value.getContext('2d').getTransform()
     panState.onStart({ x: e, y: f }, { x: action.clientX, y: action.clientY })
   } else {
-    const { isInside, isOutside, borderSide } = selectionArea.detectRegion(canvasCoordinates)
+    const { isInside, isOutside, borderSide } = selectionArea.detectRegion(coordinate)
 
     interactionCursor.value.resizeBorder = borderSide
 
     if (isInside) {
-      selectionArea.storeUserClick(canvasCoordinates)
-
       canvasInteractionState.value = {
         ...interactionState,
         isDragging: true,
       }
+
+      selectionArea.onStartTranslate(coordinate)
     } else if (borderSide != BorderSide.None) {
       canvasInteractionState.value = {
         ...interactionState,
@@ -201,6 +199,7 @@ const mouseDownOnCanvas = (action: MouseEvent) => {
         },
       }
     } else if (isLeftMouseButton) {
+      selectionArea.onStartDraw(coordinate)
       canvasInteractionState.value = {
         ...interactionState,
         isDrawing: true,
@@ -216,10 +215,6 @@ const mouseWheelOnCanvas = (action: WheelEvent) => {
 
   action.preventDefault()
 
-  const { x, y } = getCanvasCoordinates(action)
-  canvasCoordinates.x = x
-  canvasCoordinates.y = y
-
   canvasRenderer.zoom({ x: action.offsetX, y: action.offsetY }, action.deltaY)
 }
 
@@ -234,7 +229,7 @@ const mouseUpOnCanvas = (e) => {
 }
 
 const mouseMoveOnCanvas = (action: MouseEvent) => {
-  const { x, y } = getCanvasCoordinates(action)
+  const coordinate = getCanvasCoordinates(action)
 
   const { isPanning, isDragging, isResizing, isDrawing, resizeSide } = canvasInteractionState.value
 
@@ -250,17 +245,20 @@ const mouseMoveOnCanvas = (action: MouseEvent) => {
     const { x, y } = panState.onMove(currentCoordinates)
     canvasRenderer.setCanvasOffset({ x, y })
   } else if (isDragging) {
-    canvasRenderer.updateSelectionPosition(x, y)
+    selectionArea.onTranslate(coordinate)
+    canvasRenderer.redraw()
   } else if (isResizing) {
-    canvasRenderer.resizeSelectionArea({ x, y }, resizeSide)
+    selectionArea.onResize(coordinate, resizeSide)
+    canvasRenderer.redraw()
   } else if (isDrawing) {
-    canvasRenderer.drawOnCanvas(canvasCoordinates.x, canvasCoordinates.y, x, y)
+    selectionArea.onDraw(coordinate)
+    canvasRenderer.redraw()
   } else {
     const {
       isInside,
       isOutside,
       borderSide: hoverBorderSide,
-    } = selectionArea.detectRegion({ x, y })
+    } = selectionArea.detectRegion(coordinate)
     showBorderResize = hoverBorderSide
     showCrosshair = isOutside
     showHover = isInside
@@ -309,8 +307,7 @@ const onKeyOverCanvas = (e) => {
           } else {
             ctx.setTransform(new DOMMatrix())
           }
-          canvasRenderer.canvasBackground()
-          canvasRenderer.drawRect(selectionArea)
+          canvasRenderer.redraw()
           return true
 
         case 'Space':
@@ -363,10 +360,10 @@ onMounted(() => {
         return false
       })
 
-      canvasRenderer = new CanvasRenderer(canvas, props.imageContent, selectionArea)
+      canvasRenderer = new CanvasRenderer(canvas, props.imageContent, [selectionArea])
       loadDetector()
       isCanvasReady.value = true
-      window.requestAnimationFrame(canvasRenderer.canvasBackground)
+      canvasRenderer.redraw()
     }
   })
 })

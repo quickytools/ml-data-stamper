@@ -1,21 +1,16 @@
-import { SelectionArea } from '../box-editor/SelectionArea'
+import type { CanvasRenderable } from './CanvasRenderable'
 
 export class CanvasRenderer {
-  private imageForeground: ImageBitmap | null
-  private editorCanvas: HTMLCanvasElement
-  private ctx: CanvasRenderingContext2D
+  private readonly ctx: CanvasRenderingContext2D
 
-  private selectionArea = new SelectionArea()
+  private isDirty = false
 
   constructor(
-    editorCanvas: HTMLCanvasElement,
-    imageForeground: ImageBitmap | null,
-    selectionArea: SelectionArea,
+    private readonly editorCanvas: HTMLCanvasElement,
+    private foregroundImage: ImageBitmap | null,
+    private readonly renderables: Array<CanvasRenderable> = [],
   ) {
-    this.editorCanvas = editorCanvas
     this.ctx = editorCanvas.getContext('2d')!
-    this.imageForeground = imageForeground
-    this.selectionArea = selectionArea
   }
 
   private drawCheckerboard({ startX, startY, width, height, lightColor, darkColor }) {
@@ -32,7 +27,21 @@ export class CanvasRenderer {
     }
   }
 
-  canvasBackground = () => {
+  redraw() {
+    this.isDirty = true
+    window.requestAnimationFrame(() => {
+      this.redrawDirty()
+    })
+  }
+
+  private redrawDirty() {
+    if (this.isDirty) {
+      this.isDirty = false
+      this.redrawAll()
+    }
+  }
+
+  private redrawAll = () => {
     const canvas = this.editorCanvas
     const { a, e, f } = this.ctx.getTransform()
 
@@ -54,13 +63,20 @@ export class CanvasRenderer {
       lightColor: 'rgba(255, 255, 255, 0.80)',
       darkColor: 'rgba(0, 0, 0, 0.05)',
     })
-    if (this.imageForeground != null) {
-      this.ctx.drawImage(this.imageForeground, 0, 0)
+
+    if (this.foregroundImage) {
+      this.ctx.drawImage(this.foregroundImage, 0, 0)
+    }
+
+    // TODO Order of operations
+    for (const renderable of this.renderables) {
+      renderable.draw(this.ctx)
     }
   }
 
-  setForegroundImage = async (bitImage: ImageBitmap) => {
-    this.imageForeground = bitImage
+  setForegroundImage = async (image: ImageBitmap) => {
+    this.foregroundImage = image
+    this.redraw()
   }
 
   zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
@@ -84,92 +100,14 @@ export class CanvasRenderer {
 
     ctx.setTransform(updatedXform)
 
-    this.canvasBackground() // redraws the background
-    this.drawRect(this.selectionArea)
+    this.redraw()
   }
 
   setCanvasOffset = (coordinate: { x: number; y: number }) => {
     const { a } = this.ctx.getTransform()
     this.ctx.setTransform(a, 0, 0, a, coordinate.x, coordinate.y)
 
-    this.canvasBackground()
-    this.drawRect(this.selectionArea)
-  }
-
-  drawOnCanvas = (x1: number, y1: number, x2: number, y2: number) => {
-    this.canvasBackground()
-
-    const startX = Math.min(x1, x2)
-    const startY = Math.min(y1, y2)
-    const width = Math.abs(x2 - x1)
-    const height = Math.abs(y2 - y1)
-
-    this.selectionArea.x = startX
-    this.selectionArea.y = startY
-    this.selectionArea.width = width
-    this.selectionArea.height = height
-
-    this.drawRect(this.selectionArea)
-  }
-
-  // function to move the rectangle
-  updateSelectionPosition = (x: number, y: number) => {
-    this.canvasBackground()
-
-    this.selectionArea.move(x, y)
-
-    this.drawRect(this.selectionArea)
-  }
-
-  resizeSelectionArea = (
-    coordinate: { x: number; y: number },
-    isResizing: {
-      isTop: boolean
-      isRight: boolean
-      isBottom: boolean
-      isLeft: boolean
-    },
-  ) => {
-    const { x, y } = coordinate
-
-    this.canvasBackground()
-
-    const { isTop, isRight, isBottom, isLeft } = isResizing
-    if (isLeft) {
-      const newWidth = this.selectionArea.x + this.selectionArea.width - x
-      if (newWidth >= this.selectionArea.borderSize) {
-        this.selectionArea.x = x
-        this.selectionArea.width = newWidth
-      }
-    }
-    if (isRight) {
-      const newWidth = x - this.selectionArea.x
-      if (newWidth >= this.selectionArea.borderSize) {
-        this.selectionArea.width = newWidth
-      }
-    }
-    if (isTop) {
-      const newHeight = this.selectionArea.y + this.selectionArea.height - y
-      if (newHeight >= this.selectionArea.borderSize) {
-        this.selectionArea.y = y
-        this.selectionArea.height = newHeight
-      }
-    }
-    if (isBottom) {
-      const newHeight = y - this.selectionArea.y
-      if (newHeight >= this.selectionArea.borderSize) {
-        this.selectionArea.height = newHeight
-      }
-    }
-
-    this.drawRect(this.selectionArea)
-  }
-
-  drawRect = (rectangle: { x: number; y: number; width: number; height: number }) => {
-    const ctx = this.ctx
-    ctx.beginPath()
-    ctx.fillStyle = 'rgba(255, 0, 0, 0.05)'
-    ctx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height)
+    this.redraw()
   }
 
   getCanvasCoordinates(viewCoordinates: { x: number; y: number }) {
