@@ -51,6 +51,7 @@ const isLoadingDetector = ref(false)
 const isDetectingObjects = ref(false)
 
 const objectDetector = new YoloObjectDetector()
+// TODO Remove listeners as well
 objectDetector.addEventListener('loading', ({ detail }) => {
   isLoadingDetector.value = detail
 })

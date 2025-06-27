@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
-
-import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import { CanvasInteractor } from '../box-editor/CanvasInteractor'
+
+import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
+
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const props = defineProps({
+  // TODO Image content should contain identifier of some sort like video ID+frame index or image ID
+  // TODO Reformat data model to include selection area and other info as well
   imageContent: {
     type: Object, // ImageContent
   },
@@ -53,6 +56,7 @@ const selectionArea = new SelectionArea()
 const objectDetector = new YoloObjectDetector()
 let detectDelayTimer: ReturnType<typeof window.setTimeout>
 
+// TODO Remove listeners as well
 // TODO Update visuals to reflect detection state
 objectDetector.addEventListener('loading', ({ detail }) => {
   isLoadingDetector.value = detail
@@ -90,6 +94,7 @@ watch(
         clearTimeout(detectDelayTimer)
         detectDelayTimer = setTimeout(async () => {
           try {
+            // TODO Only if selection doesn't already exist or command is given to rerun detection
             const imageCanvas = imageDataToCanvas(content)
             const detected = await detectObjects(imageCanvas)
             const detectedSportsBall = detected
@@ -118,6 +123,23 @@ watch(
     }
   },
 )
+
+const cursorClasses = computed(() => {
+  const { crosshair, hovering, resizeBorder } = interactionCursor.value
+  return {
+    canvas: crosshair,
+    hover: hovering,
+    dragging: selectionInteractionState.value.shape.isDragging,
+    'resize-left': resizeBorder == BorderSide.Left,
+    'resize-right': resizeBorder == BorderSide.Right,
+    'resize-top': resizeBorder == BorderSide.Top,
+    'resize-bottom': resizeBorder == BorderSide.Bottom,
+    'top-left-corner': resizeBorder == BorderSide.TopLeft,
+    'top-right-corner': resizeBorder == BorderSide.TopRight,
+    'bottom-left-corner': resizeBorder == BorderSide.BottomLeft,
+    'bottom-right-corner': resizeBorder == BorderSide.BottomRight,
+  }
+})
 
 const mouseDownOnCanvas = (action: MouseEvent) => {
   if (canvasInteractor) {
@@ -243,6 +265,7 @@ onMounted(() => {
   nextTick(() => {
     const canvas = editorCanvas.value
     if (canvas) {
+      // TODO Remove listener as well
       canvas.addEventListener('contextmenu', (e) => {
         e.preventDefault()
         return false
@@ -272,7 +295,7 @@ div.fill-space(ref="canvasContainer")
   canvas(ref="editorCanvas"
          :width='editorCanvasWidth'
          :height='editorCanvasHeight'
-         :class="{canvas: interactionCursor.crosshair, hover: interactionCursor.hovering, dragging: selectionInteractionState.shape.isDragging, 'resize-left': interactionCursor.resizeBorder==BorderSide.Left, 'resize-right': interactionCursor.resizeBorder==BorderSide.Right, 'resize-top': interactionCursor.resizeBorder==BorderSide.Top, 'resize-bottom': interactionCursor.resizeBorder==BorderSide.Bottom, 'top-left-corner': interactionCursor.resizeBorder==BorderSide.TopLeft, 'top-right-corner': interactionCursor.resizeBorder==BorderSide.TopRight, 'bottom-left-corner': interactionCursor.resizeBorder==BorderSide.BottomLeft, 'bottom-right-corner': interactionCursor.resizeBorder==BorderSide.BottomRight}"
+         :class="cursorClasses"
          @mousedown="mouseDownOnCanvas"
          @mousemove="mouseMoveOnCanvas"
          @mouseup="mouseUpOnCanvas"
@@ -321,4 +344,3 @@ canvas {
   cursor: se-resize;
 }
 </style>
-../types/RectangleInteractionState

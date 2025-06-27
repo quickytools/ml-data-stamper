@@ -1,4 +1,4 @@
-import type { CanvasRenderable } from '../types/CanvasRenderable'
+import type { CanvasRenderable } from '@/types/CanvasRenderable'
 import type { RectangleSide } from '@/types/RectangleInteractionState'
 
 export enum BorderSide {

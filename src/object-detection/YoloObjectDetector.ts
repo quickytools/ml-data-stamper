@@ -85,8 +85,8 @@ export class YoloObjectDetector extends EventTarget implements ObjectDetector {
       })
 
       if (!Array.isArray(detected) || detected.length === 0) {
-        console.log('fallback to segmentation process — no detections')
-        return await this.fallBackSegment(data)
+        // console.log('fallback to segmentation process — no detections')
+        // return await this.fallBackSegment(data)
       }
 
       return detected
