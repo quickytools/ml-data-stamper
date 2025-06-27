@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch, toRaw } from 'vue'
+
 import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
+
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
-import LoadVideo from './LoadVideo.vue'
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
+
+const props = defineProps({
+  imageContent: {
+    type: Object, // ImageContent
+  },
+})
 
 const canvasContainer = ref()
 
@@ -11,11 +18,6 @@ const editorCanvas = ref()
 const editorCanvasWidth = ref(0)
 const editorCanvasHeight = ref(0)
 const isCanvasReady = ref(false)
-const currentFrameData = ref<{
-  content: ImageData
-  width: number
-  height: number
-} | null>(null)
 const isLoadingDetector = ref(false)
 const isDetectingObjects = ref(false)
 const canvasInteractionState = ref({
@@ -96,44 +98,47 @@ function imageDataToCanvas(imageData: ImageData) {
   return canvas
 }
 
-watch(currentFrameData, async (currentFrame) => {
-  // watches for frame changes
-  if (isCanvasReady.value && currentFrame != null) {
-    try {
-      const rawContent = toRaw(currentFrame.content)
-      const bitImage = await createImageBitmap(rawContent)
-      await canvasRenderer.setForegroundImage(bitImage)
-      canvasRenderer.canvasBackground()
-      clearTimeout(detectDelayTimer)
-      detectDelayTimer = setTimeout(async () => {
-        try {
-          const convertedImage = imageDataToCanvas(currentFrame.content)
-          const detected = await detectObjects(convertedImage)
-          console.log('detected: ', detected)
-          const detectedSportsBall = detected
-            .filter(
-              ({ score, label }: { score: number; label: string }) =>
-                label === 'sports ball' && score > 0.9,
-            )
-            .sort((a: { score: number }, b: { score: number }) => b.score - a.score)
-          if (detectedSportsBall[0]?.box) {
-            console.log(
-              'Highest confidence detection',
-              detectedSportsBall[0].box,
-              detectedSportsBall[0],
-            )
-            const { xmin, ymin, xmax, ymax } = detectedSportsBall[0].box
-            canvasRenderer.drawOnCanvas(xmin, ymin, xmax, ymax)
+watch(
+  () => props.imageContent,
+  async (currentFrame) => {
+    // watches for frame changes
+    if (isCanvasReady.value && currentFrame != null) {
+      try {
+        const rawContent = toRaw(currentFrame.content)
+        const bitImage = await createImageBitmap(rawContent)
+        await canvasRenderer.setForegroundImage(bitImage)
+        canvasRenderer.canvasBackground()
+        clearTimeout(detectDelayTimer)
+        detectDelayTimer = setTimeout(async () => {
+          try {
+            const convertedImage = imageDataToCanvas(currentFrame.content)
+            const detected = await detectObjects(convertedImage)
+            console.log('detected: ', detected)
+            const detectedSportsBall = detected
+              .filter(
+                ({ score, label }: { score: number; label: string }) =>
+                  label === 'sports ball' && score > 0.9,
+              )
+              .sort((a: { score: number }, b: { score: number }) => b.score - a.score)
+            if (detectedSportsBall[0]?.box) {
+              console.log(
+                'Highest confidence detection',
+                detectedSportsBall[0].box,
+                detectedSportsBall[0],
+              )
+              const { xmin, ymin, xmax, ymax } = detectedSportsBall[0].box
+              canvasRenderer.drawOnCanvas(xmin, ymin, xmax, ymax)
+            }
+          } catch (e) {
+            console.error('failed to convert ImageData from currentFrame.content: ', e)
           }
-        } catch (e) {
-          console.error('failed to convert ImageData from currentFrame.content: ', e)
-        }
-      }, 300)
-    } catch (e) {
-      console.error('failed to create imageBitMap from currentFrame.content: ', e)
+        }, 300)
+      } catch (e) {
+        console.error('failed to create imageBitMap from currentFrame.content: ', e)
+      }
     }
-  }
-})
+  },
+)
 
 const getCanvasCoordinates = (action: MouseEvent) =>
   canvasRenderer.getCanvasCoordinates({ x: action.offsetX, y: action.offsetY })
@@ -339,7 +344,7 @@ onMounted(() => {
         return false
       })
 
-      canvasRenderer = new CanvasRenderer(canvas, currentFrameData.value, selectionArea)
+      canvasRenderer = new CanvasRenderer(canvas, props.imageContent, selectionArea)
       loadDetector()
       isCanvasReady.value = true
       window.requestAnimationFrame(canvasRenderer.canvasBackground)
@@ -350,10 +355,6 @@ onMounted(() => {
 const onScrubFrame = (delta) => {
   // TODO Emit event
   // videoController.value.changeFrame(delta)
-}
-
-const onFrameChange = (e) => {
-  currentFrameData.value = e
 }
 </script>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTemplateRef, ref, watch, inject, defineProps, defineEmits, defineExpose } from 'vue'
+import { useTemplateRef, ref, watch, inject } from 'vue'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
@@ -12,10 +12,11 @@ import { ClientSideVideoLoader } from '../video-load/ClientSideVideoLoader'
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const props = defineProps({
+  // true emits video data as event false renders frame in component camvas
   isEventEmitter: {
     type: Boolean,
     default: false,
-  }, // true emits video data as event false renders frame in component camvas
+  },
   column: {
     type: Boolean,
     default: false,
@@ -98,6 +99,7 @@ const loadFrame = (index, frames) => {
     const frame = frames[index]
     if (props.isEventEmitter) {
       emit('frameChange', {
+        // TODO File data including signature, frame, ...
         content: frame.content,
         width: videoCanvasWidth.value,
         height: videoCanvasHeight.value,
@@ -155,7 +157,7 @@ const onFileChange = (e) => {
           frameRate: videoData.frameRate,
           orientationDegrees: videoData.orientation,
         }
-        // TODO Emit
+        // TODO Cache and/or emit
         console.log('save video data', videoData, videoDescription)
       } catch (e) {
         console.error(e)
