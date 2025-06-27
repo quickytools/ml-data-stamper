@@ -14,13 +14,15 @@ const onFrameChange = (e) => {
   videoFrameContent.value = e
 }
 
-const onScrubFrame = (delta) => {
-  videoController.value.changeFrame(delta)
+const onSeekFrame = ({ delta }) => {
+  if (delta) {
+    videoController.value.changeFrame(delta)
+  }
 }
 </script>
 
 <template lang="pug">
 q-page.row
     LoadVideo.col-3.q-px-md(ref="videoController" column :isEventEmitter="true" @frameChange='onFrameChange')
-    BoundingBoxEditor.col(:imageContent="videoFrameContent")
+    BoundingBoxEditor.col(:imageContent="videoFrameContent" @seekFrame="onSeekFrame")
 </template>

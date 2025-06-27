@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, toRaw } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, toRaw } from 'vue'
 
 import { BorderSide, SelectionArea } from '../box-editor/SelectionArea'
 
@@ -11,6 +11,13 @@ const props = defineProps({
     type: Object, // ImageContent
   },
 })
+
+const emit = defineEmits<{
+  /**
+   * On request change in frame
+   */
+  seekFrame: [delta: number]
+}>()
 
 const canvasContainer = ref()
 
@@ -285,6 +292,10 @@ const mouseLeaveOnCanvas = (action) => {
 }
 
 const onKeyOverCanvas = (e) => {
+  if (!isMouseOverCanvas) {
+    return false
+  }
+
   switch (e.type) {
     case 'keydown':
       const keyCode = e.code
@@ -305,9 +316,9 @@ const onKeyOverCanvas = (e) => {
         case 'Space':
           isSpacedPressedOverCanvas = true
           return true
-        case 'ArrowLeft':
-        case 'ArrowRight':
-          onScrubFrame(keyCode == 'ArrowLeft' ? -1 : 1)
+        case 'Comma':
+        case 'Period':
+          onScrubFrame(keyCode == 'Comma' ? -1 : 1)
           return true
       }
       break
@@ -318,7 +329,7 @@ const onKeyOverCanvas = (e) => {
 
 // TODO Keymapping
 const onKeyEvent = (e: MouseEvent) => {
-  if (isMouseOverCanvas && onKeyOverCanvas(e)) {
+  if (onKeyOverCanvas(e)) {
     e.stopPropagation()
     e.preventDefault()
   }
@@ -327,11 +338,19 @@ const onKeyEvent = (e: MouseEvent) => {
   }
 }
 
-// TODO Add in mount, remove in unmount or refactor
-document.addEventListener('keyup', onKeyEvent)
-document.addEventListener('keydown', onKeyEvent)
+const registerListeners = (isRegistering) => {
+  if (isRegistering) {
+    document.addEventListener('keyup', onKeyEvent)
+    document.addEventListener('keydown', onKeyEvent)
+  } else {
+    document.removeEventListener('keyup', onKeyEvent)
+    document.removeEventListener('keydown', onKeyEvent)
+  }
+}
 
 onMounted(() => {
+  registerListeners(true)
+
   const container = canvasContainer.value
   editorCanvasWidth.value = container.clientWidth
   editorCanvasHeight.value = container.clientHeight
@@ -352,9 +371,12 @@ onMounted(() => {
   })
 })
 
+onUnmounted(() => {
+  registerListeners(false)
+})
+
 const onScrubFrame = (delta) => {
-  // TODO Emit event
-  // videoController.value.changeFrame(delta)
+  emit('seekFrame', { delta })
 }
 </script>
 
