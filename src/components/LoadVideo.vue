@@ -1,42 +1,44 @@
 <script setup lang="ts">
-import {
-  useTemplateRef,
-  ref,
-  watch,
-  inject,
-  onMounted,
-  defineProps,
-  defineEmits,
-  defineExpose,
-} from 'vue'
+import { useTemplateRef, ref, watch, inject } from 'vue'
 import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
+import debounce from 'lodash.debounce'
+
+import type { ImageContent } from '@/models/ImageContent'
 
 import { ClientSideVideoLoader } from '../video-load/ClientSideVideoLoader'
 
 import { YoloObjectDetector } from '../object-detection/YoloObjectDetector'
 
 const props = defineProps({
+  // true emits video data as event false renders frame in component camvas
   isEventEmitter: {
     type: Boolean,
     default: false,
-  }, // true emits video data as event false renders frame in component camvas
+  },
+  column: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits<{
   /**
-   * On video data load and frame change the frame content, frame width, and frame height is emitted.
+   * On video data load and frame change the frame content is broadcasted
    */
-  frameChange: [content: any, width: number, height: number]
+  frameChange: ImageContent
 }>()
 
 const sourceVideoRepository = inject('source-video-repository')
 
 const fileInput = useTemplateRef('file')
+const loadingFileCount = ref(0)
+
 const videoCanvas = ref()
 const videoCanvasWidth = ref(0)
 const videoCanvasHeight = ref(0)
+
 const sliderFrameIndex = ref(0)
 
 const videoSrc = ref('')
@@ -45,14 +47,11 @@ const videoFrames = ref([])
 
 const videoDataSubject = new Subject()
 
-let canvasRotation = 0
-
 const isLoadingDetector = ref(false)
 const isDetectingObjects = ref(false)
 
-// TODO Enable/disable UI accordingly (while loading)
-
 const objectDetector = new YoloObjectDetector()
+// TODO Remove listeners as well
 objectDetector.addEventListener('loading', ({ detail }) => {
   isLoadingDetector.value = detail
 })
@@ -73,11 +72,7 @@ const seekVideoData = useObservable(
     map((data) => {
       const videoFrameCount = data.frames.length
       if (videoFrameCount) {
-        const { config, orientation } = data
-        const isRotated = (orientation / 90) % 2 == 1
-        const width = isRotated ? config.codedHeight : config.codedWidth
-        const height = isRotated ? config.codedWidth : config.codedHeight
-        return { ...data, width, height }
+        return data
       }
 
       return {}
@@ -85,11 +80,27 @@ const seekVideoData = useObservable(
   ),
 )
 
+const detectOnCanvas = async () => {
+  const detected = await detectObjects(videoCanvas.value)
+  const detectedSportsBall = detected
+    .filter(({ score, label }) => label == 'sports ball' && score > 0.9)
+    .sort((a, b) => b.score - a.score)
+  if (detectedSportsBall.length) {
+    const firstDetection = detectedSportsBall[0]
+    console.log('Highest confidence detection', firstDetection.box, firstDetection)
+  } else {
+    console.log('High confidence sports ball not detected', detected)
+  }
+}
+
+const debounceDetectOnCanvas = debounce(detectOnCanvas, 300)
+
 const loadFrame = (index, frames) => {
   if (frames && index >= 0 && index < frames.length) {
     const frame = frames[index]
     if (props.isEventEmitter) {
       emit('frameChange', {
+        // TODO File data including signature, frame, ...
         content: frame.content,
         width: videoCanvasWidth.value,
         height: videoCanvasHeight.value,
@@ -99,18 +110,7 @@ const loadFrame = (index, frames) => {
       ctx.putImageData(frame.content, 0, 0)
 
       // TODO Improve structure
-      loadDetector().then(async () => {
-        const detected = await detectObjects(videoCanvas.value)
-        const detectedSportsBall = detected
-          .filter(({ score, label }) => label == 'sports ball' && score > 0.9)
-          .sort((a, b) => b.score - a.score)
-        if (detectedSportsBall.length) {
-          const firstDetection = detectedSportsBall[0]
-          console.log('Highest confidence detection', firstDetection.box, firstDetection)
-        } else {
-          console.log('High confidence sports ball not detected', detected)
-        }
-      })
+      loadDetector().then(debounceDetectOnCanvas)
     }
   }
 }
@@ -128,9 +128,9 @@ watch(seekVideoData, (value, prev) => {
     videoCanvasWidth.value = width
     videoCanvasHeight.value = height
     videoFrames.value = frames
-    canvasRotation = (orientation * Math.PI) / 180
     // TODO Find canvas resize or similar event
     setTimeout(async () => {
+      sliderFrameIndex.value = 0
       loadFrame(0, frames)
     }, 100)
   }
@@ -143,6 +143,7 @@ watch(sliderFrameIndex, async (index) => {
 const onFileChange = (e) => {
   const files = e.target.files
   if (files.length) {
+    loadingFileCount.value += 1
     const videoFile = files[0]
 
     new Promise(async (resolve) => {
@@ -157,11 +158,12 @@ const onFileChange = (e) => {
           frameRate: videoData.frameRate,
           orientationDegrees: videoData.orientation,
         }
-        // TODO This is failing
-        const saved = await sourceVideoRepository.saveVideo(videoDescription)
-        console.log('save video data', videoData, saved)
+        // TODO Cache and/or emit
+        console.log('save video data', videoData, videoDescription)
       } catch (e) {
         console.error(e)
+      } finally {
+        loadingFileCount.value -= 1
       }
       videoDataSubject.next(videoData)
     })
@@ -176,11 +178,6 @@ const sampleDetection = () => {
     console.log('detected', detected)
   })
 }
-
-onMounted(() => {
-  // TODO Demonstrates object detection on URL image. Delete once detection on video frames is complete.
-  // sampleDetection()
-})
 
 const changeFrame = (delta) => {
   if (delta) {
@@ -197,22 +194,25 @@ defineExpose({ changeFrame })
 <template lang="pug">
 div.column
   form
-    div.q-py-sm.row.q-gutter-md
-      label(for="file") File
-      input#file(type="file" multiple @change='onFileChange')
+    div.q-py-sm.row.q-gutter-md(:class="{column: props.column}")
+      input#file(:disabled="loadingFileCount>0" type="file" multiple @change='onFileChange')
+      q-circular-progress(v-if="loadingFileCount>0"
+                          indeterminate
+                          size="24px"
+                          color="primary"
+      )
       q-slider.frame-seeker.col(
+        v-if="videoFrames.length>0"
         v-model="sliderFrameIndex"
         :min="0"
         :max="videoFrames.length"
         label-always
         switch-label-side
-        v-if="videoFrames.length>0"
       )
   canvas(ref="videoCanvas"
-  v-if="!props.isEventEmitter"
-  :width='videoCanvasWidth'
-  :height='videoCanvasHeight'
-
+         v-if="!props.isEventEmitter"
+         :width='videoCanvasWidth'
+         :height='videoCanvasHeight'
   )
 </template>
 
@@ -223,3 +223,4 @@ div.column
   max-width: 600px;
 }
 </style>
+@/models/imageContent

@@ -11,12 +11,6 @@ type VideoFileProperties = {
   orientation: number
 }
 
-type VideoFrameData = {
-  content: ImageData
-  timestamp: Date
-  duration: number
-}
-
 export class ClientSideVideoLoader extends EventTarget implements VideoLoader {
   private async getMediaProperties(file: File): Promise<VideoFileProperties> {
     const readChunk = async (chunkSize: number, offset: number) =>
@@ -99,9 +93,10 @@ export class ClientSideVideoLoader extends EventTarget implements VideoLoader {
 
   private async loadVideo(videoFile: File, orientation: number) {
     const videoUrl = URL.createObjectURL(videoFile)
-    const videoData = { file: videoFile, frames: [], config: null }
+    const videoData = { file: videoFile, frames: [] }
     let xform: DOMMatrix | null = null
     const isRotated = (orientation / 90) % 2 == 1
+    let videoConfig: any = null
 
     const getRotationMatrix = this.getRotationMatrix
 
@@ -110,8 +105,7 @@ export class ClientSideVideoLoader extends EventTarget implements VideoLoader {
       async onFrame(frame) {
         // TODO Reuse canvases (clearing previously used)
         const canvas = document.createElement('canvas')
-        const width = videoData.config.codedWidth
-        const height = videoData.config.codedHeight
+        const { codedWidth: width, codedHeight: height } = videoConfig
 
         const ctx = canvas.getContext('2d')
         if (xform) {
@@ -136,10 +130,15 @@ export class ClientSideVideoLoader extends EventTarget implements VideoLoader {
         frame.close()
       },
       onConfig(config) {
-        videoData.config = config
+        videoConfig = config
         const { codedWidth: w, codedHeight: h } = config
         if (orientation != 0) {
           xform = getRotationMatrix(orientation, w, h)
+          videoData.width = config.codedHeight
+          videoData.height = config.codedWidth
+        } else {
+          videoData.width = config.codedWidth
+          videoData.height = config.codedHeight
         }
       },
     })
