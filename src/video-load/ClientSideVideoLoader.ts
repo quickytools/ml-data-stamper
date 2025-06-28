@@ -1,8 +1,8 @@
 import type { VideoLoader } from './VideoLoader'
 import { getFileSignature } from '@/util/fileUtil'
 
-// TODO Use local module
-import getVideoFrames from 'https://deno.land/x/get_video_frames@v0.0.10/mod.js'
+import * as getVideoFramesExport from './getVideoFrames.js'
+const getVideoFrames = getVideoFramesExport.default
 
 type VideoFileProperties = {
   duration: number
@@ -134,11 +134,14 @@ export class ClientSideVideoLoader extends EventTarget implements VideoLoader {
         const { codedWidth: w, codedHeight: h } = config
         if (orientation != 0) {
           xform = getRotationMatrix(orientation, w, h)
-          videoData.width = config.codedHeight
-          videoData.height = config.codedWidth
+        }
+
+        if (orientation % 180 == 0) {
+          videoData.width = w
+          videoData.height = h
         } else {
-          videoData.width = config.codedWidth
-          videoData.height = config.codedHeight
+          videoData.width = h
+          videoData.height = w
         }
       },
     })

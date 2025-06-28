@@ -1,5 +1,6 @@
 import type { CanvasRenderer } from './CanvasRenderer'
 import type { RectangleInteractionState } from '@/types/RectangleInteractionState'
+import type { Coordinate2d } from '@/types/Coordinate'
 import { BorderSide, SelectionArea } from './SelectionArea'
 
 const rectangleSizeNone = {
@@ -46,14 +47,11 @@ export class CanvasInteractor extends EventTarget {
   private panState = {
     zeroCoordinate: { x: 0, y: 0 },
     startPanCoordinate: { x: 0, y: 0 },
-    onStart: function (
-      zeroCoordinate: { x: number; y: number },
-      startPanCoordinate: { x: number; y: number },
-    ) {
+    onStart: function (zeroCoordinate: Coordinate2d, startPanCoordinate: Coordinate2d) {
       this.zeroCoordinate = zeroCoordinate
       this.startPanCoordinate = startPanCoordinate
     },
-    onMove: function (currentPanCoordinate: { x: number; y: number }) {
+    onMove: function (currentPanCoordinate: Coordinate2d) {
       const { x: zx, y: zy } = this.zeroCoordinate
       const { x: sx, y: sy } = this.startPanCoordinate
       const { x, y } = currentPanCoordinate

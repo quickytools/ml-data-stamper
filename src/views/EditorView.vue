@@ -11,6 +11,7 @@ const videoController = ref()
 const videoFrameContent = ref<ImageContent | undefined>()
 
 const onFrameChange = (e) => {
+  // TODO Query selection and pose data against this frame before forwarding it. Set initial data then full data once queried.
   videoFrameContent.value = e
 }
 
