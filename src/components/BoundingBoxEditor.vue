@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed, toRaw } from 'vue'
 
 import { CanvasRenderer } from '../box-editor/CanvasRenderer'
 import { CanvasInteractor } from '../box-editor/CanvasInteractor'
@@ -86,10 +86,28 @@ function imageDataToCanvas(imageData: ImageData) {
 watch(
   () => props.imageContent,
   async (imageContent) => {
-    const { content } = imageContent
+    const { content, width: imageWidth, height: imageHeight } = imageContent
     if (content) {
       try {
-        canvasRenderer.setForegroundImage(content)
+        const canvasWidth = editorCanvasWidth.value
+        const canvasHeight = editorCanvasHeight.value
+        const fitWidth = canvasWidth / imageWidth
+        const fitHeight = canvasHeight / imageHeight
+        const fitScale = Math.min(fitWidth, fitHeight)
+        let offsetX = 0
+        let offsetY = 0
+        if (fitWidth > fitHeight) {
+          offsetX = (canvasWidth - imageWidth * fitScale) * 0.5
+        } else {
+          offsetY = (canvasHeight - imageHeight * fitScale) * 0.5
+        }
+        const offset = { x: offsetX, y: offsetY }
+        const rawContent = toRaw(content)
+        const contentImage = await createImageBitmap(rawContent)
+        canvasRenderer.setForegroundImage(contentImage, {
+          scale: fitScale,
+          offset,
+        })
 
         clearTimeout(detectDelayTimer)
         detectDelayTimer = setTimeout(async () => {

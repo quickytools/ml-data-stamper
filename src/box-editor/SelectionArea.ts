@@ -1,5 +1,6 @@
 import type { CanvasRenderable } from '@/types/CanvasRenderable'
 import type { RectangleSide } from '@/types/RectangleInteractionState'
+import type { Coordinate2d } from '@/types/Coordinate'
 
 export enum BorderSide {
   None = 0,
@@ -69,8 +70,8 @@ export class SelectionArea implements CanvasRenderable {
     return this.width > 0 && this.height > 0
   }
 
-  private drawCoordinate: { x: number; y: number } = { x: 0, y: 0 }
-  private translateOffset: { x: number; y: number } = { x: 0, y: 0 }
+  private drawCoordinate: Coordinate2d = { x: 0, y: 0 }
+  private translateOffset: Coordinate2d = { x: 0, y: 0 }
 
   constructor(borderSize = 15) {
     this.borderSize = borderSize
@@ -82,7 +83,7 @@ export class SelectionArea implements CanvasRenderable {
     return new DOMMatrix([a, 0, 0, a, -this.x * a, -this.y * a])
   }
 
-  contains(coordinate: { x: number; y: number }): boolean {
+  contains(coordinate: Coordinate2d): boolean {
     const { x, y } = coordinate
     return x >= this.xMin && x <= this.xMax && y >= this.yMin && y <= this.yMax
   }
@@ -113,7 +114,7 @@ export class SelectionArea implements CanvasRenderable {
     return BorderSide.None
   }
 
-  detectRegion(coordinate: { x: number; y: number }): AreaRegion {
+  detectRegion(coordinate: Coordinate2d): AreaRegion {
     const isInside = false
     const isOutside = false
     const borderSide = BorderSide.None
@@ -152,11 +153,11 @@ export class SelectionArea implements CanvasRenderable {
     }
   }
 
-  onStartDraw(coordinate: { x: number; y: number }) {
+  onStartDraw(coordinate: Coordinate2d) {
     this.drawCoordinate = coordinate
   }
 
-  onDraw(coordinate: { x: number; y: number }) {
+  onDraw(coordinate: Coordinate2d) {
     const { x, y } = coordinate
     const { x: xStart, y: yStart } = this.drawCoordinate
 
@@ -166,22 +167,22 @@ export class SelectionArea implements CanvasRenderable {
     this.height = Math.abs(yStart - y)
   }
 
-  update(min: { x: number; y: number }, max: { x: number; y: number }) {
+  update(min: Coordinate2d, max: Coordinate2d) {
     this.onStartDraw(min)
     this.onDraw(max)
   }
 
-  onStartTranslate(coordinate: { x: number; y: number }) {
+  onStartTranslate(coordinate: Coordinate2d) {
     this.translateOffset.x = this.x - coordinate.x
     this.translateOffset.y = this.y - coordinate.y
   }
 
-  onTranslate(coordinate: { x: number; y: number }) {
+  onTranslate(coordinate: Coordinate2d) {
     this.x = coordinate.x + this.translateOffset.x
     this.y = coordinate.y + this.translateOffset.y
   }
 
-  onResize = (coordinate: { x: number; y: number }, isResizing: RectangleSide) => {
+  onResize = (coordinate: Coordinate2d, isResizing: RectangleSide) => {
     const { x, y } = coordinate
 
     const { top, right, bottom, left } = isResizing

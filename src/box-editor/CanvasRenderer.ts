@@ -1,4 +1,5 @@
 import type { CanvasRenderable } from '@/types/CanvasRenderable'
+import type { Coordinate2d } from '@/types/Coordinate'
 
 export class CanvasRenderer {
   private readonly ctx: CanvasRenderingContext2D
@@ -7,7 +8,7 @@ export class CanvasRenderer {
 
   constructor(
     private readonly editorCanvas: HTMLCanvasElement,
-    private foregroundImage: ImageData | null,
+    private foregroundImage: ImageBitmap | null,
     private readonly renderables: Array<CanvasRenderable> = [],
   ) {
     this.ctx = editorCanvas.getContext('2d')!
@@ -65,7 +66,7 @@ export class CanvasRenderer {
     })
 
     if (this.foregroundImage) {
-      this.ctx.putImageData(this.foregroundImage, 0, 0)
+      this.ctx.drawImage(this.foregroundImage, 0, 0)
     }
 
     // TODO Order of operations
@@ -74,12 +75,23 @@ export class CanvasRenderer {
     }
   }
 
-  setForegroundImage = async (image: ImageData) => {
+  setForegroundImage = async (
+    image: ImageBitmap,
+    transform: { scale: number; offset: Coordinate2d },
+  ) => {
     this.foregroundImage = image
+
+    const xform = this.ctx.getTransform()
+    const { scale, offset } = transform
+    const a = scale > 0 ? scale : xform.a
+    const e = offset ? offset.x : xform.e
+    const f = offset ? offset.y : xform.f
+    this.ctx.setTransform(a, 0, 0, a, e, f)
+
     this.redraw()
   }
 
-  zoom = (mouseCoordinate: { x: number; y: number }, deltaY: number) => {
+  zoom = (mouseCoordinate: Coordinate2d, deltaY: number) => {
     const ctx = this.ctx
 
     const xform = ctx.getTransform()
@@ -103,14 +115,14 @@ export class CanvasRenderer {
     this.redraw()
   }
 
-  setCanvasOffset = (coordinate: { x: number; y: number }) => {
+  setCanvasOffset = (coordinate: Coordinate2d) => {
     const { a } = this.ctx.getTransform()
     this.ctx.setTransform(a, 0, 0, a, coordinate.x, coordinate.y)
 
     this.redraw()
   }
 
-  getCanvasCoordinates(viewCoordinates: { x: number; y: number }) {
+  getCanvasCoordinates(viewCoordinates: Coordinate2d) {
     const ctx = this.ctx
 
     const { x, y } = viewCoordinates

@@ -134,11 +134,14 @@ export class ClientSideVideoLoader extends EventTarget implements VideoLoader {
         const { codedWidth: w, codedHeight: h } = config
         if (orientation != 0) {
           xform = getRotationMatrix(orientation, w, h)
-          videoData.width = config.codedHeight
-          videoData.height = config.codedWidth
+        }
+
+        if (orientation % 180 == 0) {
+          videoData.width = w
+          videoData.height = h
         } else {
-          videoData.width = config.codedWidth
-          videoData.height = config.codedHeight
+          videoData.width = h
+          videoData.height = w
         }
       },
     })
