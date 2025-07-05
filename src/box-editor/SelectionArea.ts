@@ -1,6 +1,7 @@
 import type { CanvasRenderable } from '@/types/CanvasRenderable'
 import type { RectangleSide } from '@/types/RectangleInteractionState'
 import type { Coordinate2d } from '@/types/Coordinate'
+import type { RectangleShape } from '@/types/RectangleShape'
 
 export enum BorderSide {
   None = 0,
@@ -32,6 +33,15 @@ export class SelectionArea implements CanvasRenderable {
   }
   private set borderSize(value) {
     this._borderSize = Math.max(value, 1)
+  }
+
+  get shape(): RectangleShape {
+    return {
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    }
   }
 
   private get xMin() {
@@ -223,9 +233,26 @@ export class SelectionArea implements CanvasRenderable {
 
   // CanvasRenderable
 
+  get isClippingRender() {
+    return true
+  }
+
+  get willRender(): boolean {
+    return this.width > 0 && this.height > 0
+  }
+
   draw(ctx: CanvasRenderingContext2D) {
-    ctx.beginPath()
-    ctx.fillStyle = 'rgba(255, 0, 0, 0.05)'
-    ctx.fillRect(this.x, this.y, this.width, this.height)
+    if (this.isClippingRender) {
+      ctx.moveTo(this.x, this.y)
+      ctx.lineTo(this.x, this.yMax)
+      ctx.lineTo(this.xMax, this.yMax)
+      ctx.lineTo(this.xMax, this.y)
+      ctx.closePath()
+      ctx.clip()
+    } else {
+      ctx.beginPath()
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.3)'
+      ctx.fillRect(this.x, this.y, this.width, this.height)
+    }
   }
 }

@@ -56,6 +56,11 @@ const selectionArea = new SelectionArea()
 const objectDetector = new YoloObjectDetector()
 let detectDelayTimer: ReturnType<typeof window.setTimeout>
 
+let imageContentCenterTransform = {
+  scale: 0,
+  offset: { x: 0, y: 0 },
+}
+
 // TODO Remove listeners as well
 // TODO Update visuals to reflect detection state
 objectDetector.addEventListener('loading', ({ detail }) => {
@@ -104,10 +109,11 @@ watch(
         const offset = { x: offsetX, y: offsetY }
         const rawContent = toRaw(content)
         const contentImage = await createImageBitmap(rawContent)
-        canvasRenderer.setForegroundImage(contentImage, {
+        imageContentCenterTransform = {
           scale: fitScale,
           offset,
-        })
+        }
+        canvasRenderer.setForegroundImage(contentImage, imageContentCenterTransform)
 
         clearTimeout(detectDelayTimer)
         detectDelayTimer = setTimeout(async () => {
@@ -227,15 +233,7 @@ const onKeyOverCanvas = (e) => {
       const keyCode = e.code
       switch (keyCode) {
         case 'KeyF':
-          const canvas = editorCanvas.value
-          const ctx = canvas.getContext('2d')
-          if (selectionArea.isDefined) {
-            const xform = ctx.getTransform()
-            ctx.setTransform(selectionArea.getBoundingTransform(xform))
-          } else {
-            ctx.setTransform(new DOMMatrix())
-          }
-          canvasRenderer.redraw()
+          canvasRenderer.centerContent(imageContentCenterTransform, selectionArea.shape)
           return true
 
         case 'Space':
