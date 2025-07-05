@@ -71,9 +71,25 @@ export class CanvasRenderer {
       this.ctx.drawImage(this.foregroundImage, 0, 0)
     }
 
+    const ctx = this.ctx
     // TODO Order of operations
     for (const renderable of this.renderables) {
-      renderable.draw(this.ctx)
+      ctx.save()
+
+      if (renderable.isClippingRender) {
+        if (renderable.willRender) {
+          ctx.beginPath()
+          ctx.rect(startX, startY, scaledWidth, scaledHeight)
+          renderable.draw(ctx, {})
+          // TODO Test and update when multiple renderables are clipping
+          ctx.fillStyle = '#0008'
+          ctx.fillRect(startX, startY, scaledWidth, scaledHeight)
+        }
+      } else {
+        renderable.draw(ctx, {})
+      }
+
+      ctx.restore()
     }
   }
 
