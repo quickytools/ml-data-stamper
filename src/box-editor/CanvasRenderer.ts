@@ -1,5 +1,7 @@
 import type { CanvasRenderable } from '@/types/CanvasRenderable'
 import type { Coordinate2d } from '@/types/Coordinate'
+import type { RectangleShape } from '@/types/RectangleShape'
+import type { Transform2d } from '@/types/Transform'
 
 export class CanvasRenderer {
   private readonly ctx: CanvasRenderingContext2D
@@ -7,11 +9,11 @@ export class CanvasRenderer {
   private isDirty = false
 
   constructor(
-    private readonly editorCanvas: HTMLCanvasElement,
+    private readonly renderingCanvas: HTMLCanvasElement,
     private foregroundImage: ImageBitmap | null,
     private readonly renderables: Array<CanvasRenderable> = [],
   ) {
-    this.ctx = editorCanvas.getContext('2d')!
+    this.ctx = renderingCanvas.getContext('2d')!
   }
 
   private drawCheckerboard({ startX, startY, width, height, lightColor, darkColor }) {
@@ -43,7 +45,7 @@ export class CanvasRenderer {
   }
 
   private redrawAll = () => {
-    const canvas = this.editorCanvas
+    const canvas = this.renderingCanvas
     const { a, e, f } = this.ctx.getTransform()
 
     const inverseScale = a > 0 ? 1 / a : 1
@@ -75,10 +77,7 @@ export class CanvasRenderer {
     }
   }
 
-  setForegroundImage = async (
-    image: ImageBitmap,
-    transform: { scale: number; offset: Coordinate2d },
-  ) => {
+  setForegroundImage = async (image: ImageBitmap, transform: Transform2d) => {
     this.foregroundImage = image
 
     const xform = this.ctx.getTransform()
@@ -89,6 +88,37 @@ export class CanvasRenderer {
     this.ctx.setTransform(a, 0, 0, a, e, f)
 
     this.redraw()
+  }
+
+  centerContent(targetTransform: Transform2d, fallbackShape: RectangleShape) {
+    if (targetTransform.scale > 0) {
+      const { a, e, f } = this.ctx.getTransform()
+      const { scale, offset } = targetTransform
+      if (a != scale || e != offset.x || f != offset.y) {
+        this.ctx.setTransform(targetTransform.scale, 0, 0, scale, offset.x, offset.y)
+        this.redraw()
+        return
+      }
+    }
+
+    const { width, height } = fallbackShape
+    if (width > 0 && height > 0) {
+      const canvasWidth = this.renderingCanvas.width
+      const canvasHeight = this.renderingCanvas.height
+
+      const doubleWidth = width * 2
+      const doubleHeight = height * 2
+      const fitWidth = canvasWidth / doubleWidth
+      const fitHeight = canvasHeight / doubleHeight
+      // TODO Cap max scale
+      const fitScale = Math.min(fitWidth, fitHeight)
+
+      const offsetX = -fallbackShape.x * fitScale + (canvasWidth - width * fitScale) * 0.5
+      const offsetY = -fallbackShape.y * fitScale + (canvasHeight - height * fitScale) * 0.5
+
+      this.ctx.setTransform(fitScale, 0, 0, fitScale, offsetX, offsetY)
+      this.redraw()
+    }
   }
 
   zoom = (mouseCoordinate: Coordinate2d, deltaY: number) => {

@@ -1,6 +1,7 @@
 import type { CanvasRenderable } from '@/types/CanvasRenderable'
 import type { RectangleSide } from '@/types/RectangleInteractionState'
 import type { Coordinate2d } from '@/types/Coordinate'
+import type { RectangleShape } from '@/types/RectangleShape'
 
 export enum BorderSide {
   None = 0,
@@ -32,6 +33,15 @@ export class SelectionArea implements CanvasRenderable {
   }
   private set borderSize(value) {
     this._borderSize = Math.max(value, 1)
+  }
+
+  get shape(): RectangleShape {
+    return {
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    }
   }
 
   private get xMin() {
