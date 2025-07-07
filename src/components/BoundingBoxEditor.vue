@@ -308,6 +308,9 @@ const onScrubFrame = (delta) => {
 
 <template lang="pug">
 div.fill-space(ref="canvasContainer")
+  div.fixed.q-pa-md
+    div.icon-container.q-pa-sm(v-if="isLoadingDetector || isDetectingObjects")
+      q-icon(name="img:icons/eye-scan.svg" size="48px")
   canvas(ref="editorCanvas"
          :width='editorCanvasWidth'
          :height='editorCanvasHeight'
@@ -358,5 +361,22 @@ canvas {
 }
 .bottom-right-corner {
   cursor: se-resize;
+}
+.icon-container {
+  background: #fffa;
+  border-radius: 8px;
+  animation: flashing 2s ease-in-out infinite;
+}
+
+@keyframes flashing {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 </style>
