@@ -87,6 +87,13 @@ export class SelectionArea implements CanvasRenderable {
     this.borderSize = borderSize
   }
 
+  clear() {
+    this.x = 0
+    this.y = 0
+    this.width = 0
+    this.height = 0
+  }
+
   getBoundingTransform(viewXform: { a: number }): DOMMatrix {
     // TODO Center on view bounds
     const { a } = viewXform

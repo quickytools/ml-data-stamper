@@ -44,6 +44,7 @@ const sliderFrameIndex = ref(0)
 const videoSrc = ref('')
 
 const videoFrames = ref([])
+let videoSignature = ''
 
 const videoDataSubject = new Subject()
 
@@ -104,6 +105,10 @@ const loadFrame = (index, frames) => {
         content: frame.content,
         width: videoCanvasWidth.value,
         height: videoCanvasHeight.value,
+        identifier: {
+          id: videoSignature,
+          index: index,
+        },
       })
     } else {
       const ctx = videoCanvas.value.getContext('2d')
@@ -116,7 +121,7 @@ const loadFrame = (index, frames) => {
 }
 
 watch(seekVideoData, (value, prev) => {
-  const { width, height, frames, orientation } = value
+  const { width, height, frames, orientation, fileSignature: signature } = value
 
   if (!props.isEventEmitter) {
     const canvas = videoCanvas.value
@@ -128,6 +133,7 @@ watch(seekVideoData, (value, prev) => {
     videoCanvasWidth.value = width
     videoCanvasHeight.value = height
     videoFrames.value = frames
+    videoSignature = signature
     // TODO Find canvas resize or similar event
     setTimeout(async () => {
       sliderFrameIndex.value = 0

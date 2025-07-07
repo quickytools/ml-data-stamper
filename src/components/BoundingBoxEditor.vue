@@ -91,7 +91,8 @@ function imageDataToCanvas(imageData: ImageData) {
 watch(
   () => props.imageContent,
   async (imageContent) => {
-    const { content, width: imageWidth, height: imageHeight } = imageContent
+    selectionArea.clear()
+    const { content, width: imageWidth, height: imageHeight, identifier } = imageContent
     if (content) {
       try {
         const canvasWidth = editorCanvasWidth.value
@@ -127,15 +128,16 @@ watch(
                   label === 'sports ball' && score > 0.9,
               )
               .sort((a: { score: number }, b: { score: number }) => b.score - a.score)
-            if (detectedSportsBall[0]?.box) {
-              console.log(
-                'Highest confidence detection',
-                detectedSportsBall[0].box,
-                detectedSportsBall[0],
-              )
-              const { xmin, ymin, xmax, ymax } = detectedSportsBall[0].box
-              selectionArea.update({ x: xmin, y: ymin }, { x: xmax, y: ymax })
-              canvasRenderer.redraw()
+            const { identifier: currentIdentifier } = props.imageContent
+            if (
+              identifier.id === currentIdentifier.id &&
+              identifier.index === currentIdentifier.index
+            ) {
+              if (detectedSportsBall[0]?.box) {
+                const { xmin, ymin, xmax, ymax } = detectedSportsBall[0].box
+                selectionArea.update({ x: xmin, y: ymin }, { x: xmax, y: ymax })
+                canvasRenderer.redraw()
+              }
             }
           } catch (e) {
             console.error('failed to convert frame to ImageData', e)
