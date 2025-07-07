@@ -8,7 +8,11 @@ import * as videoFrameLabelsSchema from './schema/videoFrameLabels'
 const client = new PGlite('idb://data-stamper-db')
 const db = drizzle(client, {
   casing: 'snake_case',
-  schema: { ...sourceVideosSchema, ...videoFramesSchema, ...videoFrameLabelsSchema },
+  schema: {
+    ...sourceVideosSchema,
+    ...videoFramesSchema,
+    ...videoFrameLabelsSchema,
+  },
 })
 
 export default db
