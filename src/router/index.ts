@@ -15,6 +15,12 @@ const router = createRouter({
       name: 'load-video',
       component: () => import('../views/LoadVideoView.vue'),
     },
+    // TODO Only when env is not production
+    {
+      path: '/inspect-db',
+      name: 'inspect-db',
+      component: () => import('../views/InspectDbView.vue'),
+    },
   ],
 })
 
