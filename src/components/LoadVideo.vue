@@ -4,6 +4,7 @@ import { Subject, merge } from 'rxjs'
 import { map } from 'rxjs/operators'
 import { useObservable } from '@vueuse/rxjs'
 import debounce from 'lodash.debounce'
+import type { VideoDescription } from '@/types/VideoDescription'
 
 import type { ImageContent } from '@/models/ImageContent'
 
@@ -24,6 +25,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits<{
+  /**
+   * Video is loaded
+   */
+  videoLoad: VideoDescription
   /**
    * On video data load and frame change the frame content is broadcasted
    */
@@ -164,8 +169,7 @@ const onFileChange = (e) => {
           frameRate: videoData.frameRate,
           orientationDegrees: videoData.orientation,
         }
-        // TODO Cache and/or emit
-        console.log('save video data', videoData, videoDescription)
+        emit('videoLoad', videoDescription)
       } catch (e) {
         console.error(e)
       } finally {

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import db from '../drizzleDb'
-import type { VideoDescription } from '.'
+import type { VideoDescription } from '@/types/VideoDescription'
 import { sourceVideos } from '../schema/sourceVideos'
 import Joi from 'joi'
 
@@ -15,11 +15,15 @@ const videoDescriptionSchema = Joi.object({
   orientationDegrees: Joi.number().min(0).max(270).multiple(90),
 })
 
+/**
+ * @returns Record ID if data was inserted or -1 if not (conflict)
+ */
 export const insertVideo = async (description: VideoDescription) => {
   const validated = Joi.attempt(description, videoDescriptionSchema)
   const inserted = await db
     .insert(sourceVideos)
     .values(validated)
+    .onConflictDoNothing()
     .returning({ insertedId: sourceVideos.id })
   return inserted.length ? inserted[0].insertedId : -1
 }
