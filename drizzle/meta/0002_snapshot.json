@@ -1,0 +1,271 @@
+{
+  "id": "0febfdbe-bbaa-4a3a-9aee-354c5a472218",
+  "prevId": "7ddf707d-6cbb-4490-b958-81363bc16993",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.source_videos": {
+      "name": "source_videos",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "source_videos_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "signature": {
+          "name": "signature",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "frame_count": {
+          "name": "frame_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "frame_rate": {
+          "name": "frame_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orientation_degrees": {
+          "name": "orientation_degrees",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "source_videos_signature_unique": {
+          "name": "source_videos_signature_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "signature"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "orientation_degrees_validity": {
+          "name": "orientation_degrees_validity",
+          "value": "\"source_videos\".\"orientation_degrees\" IN (0, 90, 180, 270)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.video_frame_labels": {
+      "name": "video_frame_labels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "video_frame_labels_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "video_frame_id": {
+          "name": "video_frame_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label_type": {
+          "name": "label_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'rectangle'"
+        },
+        "label_data": {
+          "name": "label_data",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "modified_at": {
+          "name": "modified_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_video_frame_label_video_frame": {
+          "name": "idx_video_frame_label_video_frame",
+          "columns": [
+            {
+              "expression": "video_frame_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_video_frame_labels_deleted_at": {
+          "name": "idx_video_frame_labels_deleted_at",
+          "columns": [
+            {
+              "expression": "deleted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "video_frame_labels_video_frame_id_video_frames_id_fk": {
+          "name": "video_frame_labels_video_frame_id_video_frames_id_fk",
+          "tableFrom": "video_frame_labels",
+          "tableTo": "video_frames",
+          "columnsFrom": [
+            "video_frame_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.video_frames": {
+      "name": "video_frames",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "video_frames_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "video_id": {
+          "name": "video_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "frame_index": {
+          "name": "frame_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "video_frames_video_id_source_videos_id_fk": {
+          "name": "video_frames_video_id_source_videos_id_fk",
+          "tableFrom": "video_frames",
+          "tableTo": "source_videos",
+          "columnsFrom": [
+            "video_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "unq_video_frame": {
+          "name": "unq_video_frame",
+          "nullsNotDistinct": false,
+          "columns": [
+            "video_id",
+            "frame_index"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
